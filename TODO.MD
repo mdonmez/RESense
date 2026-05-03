@@ -8,6 +8,8 @@
 - [ ] The application attempts to connect to the PredatorSense pipe. If the background service is stopped, disabled, or not installed, it results in meaningless pipe errors. Before attempting the pipe connection, the application should verify whether the service is running and provide a clear warning to the user about starting the PredatorSense service.
 - [ ] Improve code quality, readability and consistency.
 - [ ] The original NitroSense app disables controlling the mode when running on AC, and disables fan control when on quiet mode. (I don't really remember this behavior - it will be reverse-engineered and verified how it works and will implement to resense correctly to behave like the original NitroSense app)
+- [ ] When brightness is changed with resense brightness command, the dynamic is overwritten and goes back to white static.
+- [ ] More information about reverse engineering and named pipes will be gathered and documented.
 
 # New Feature Ideas
 - [ ] Maybe a GUI with tray support
@@ -17,7 +19,7 @@
   - [ ] App-based auto profile switching like when Cyberpunk.2077 is started, switch to profile2 and when it exits, switch back to profile1. etc.
 - [ ] Nitro Key remapping to an new thing: like GUI (if created), mode switching, keyboard light switch etc. We have to think about more this.
 - [ ] The feature `resense status --monitor --interval 5 --output log.csv` periodically (e.g., every 5 seconds) records CPU/GPU temperatures and fan RPM values into a CSV file, enabling post-session analysis of potential thermal throttling behavior.
-- [ ] special stealth profile that makes keyboard white 2 level brightness, mode quiet, fans auto. (Like panic mode.)
+- [ ] Special stealth profile that makes keyboard white 2 level brightness, mode quiet, fans auto. (Like panic mode.)
 
 ## Fun Feature Ideas
 - [ ] Audio Responsiveness: Make the keyboard lighting pulse in sync with the rhythm of the music playing on the computer by performing amplitude analysis. Like live audio visualization.
