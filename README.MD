@@ -1,6 +1,6 @@
 # RESense
 
-_Reverse-engineered NitroSense GUI equivalent CLI for AN515-58._
+_Reverse-engineered NitroSense GUI equivalent CLI utility for AN515-58._
 
 ---
 
