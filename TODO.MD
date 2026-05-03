@@ -2,6 +2,9 @@
 - [ ] The app should check if the platform is AN-515-58 model and if not, it should deny running. (Or run with `--dangerously-allow-any-model`)
 - [ ] The entire CLI outputs should be rewritten to use the same style and to be more user-friendly and readable.
 - [ ] The final re-lookup should be performed to ensure the app is written correctly as expected and wanted.
+- [ ] Magic numbers should be replaced with named constants or configuration values.
+- [ ] The error messages should be improved and more user-friendly.
+- [ ] Maybe a GUI with tray support?
 
 # Status
 - [ ] A --live flag should be added to the status command that shows the current state of the fan and CPU/GPU temperature in real-time.
