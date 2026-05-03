@@ -5,6 +5,7 @@
 - [ ] Magic numbers should be replaced with named constants or configuration values.
 - [ ] The error messages should be improved and more user-friendly.
 - [ ] Maybe a GUI with tray support?
+- [ ] Update README and add docs/ for more details. Also add docs/reverse-engineering/ for more details on the reverse engineering process.
 
 # Status
 - [ ] A --live flag should be added to the status command that shows the current state of the fan and CPU/GPU temperature in real-time.
