@@ -26,19 +26,27 @@ pub fn set_operation_mode(mode: OperatingMode, skip_whispermode: bool) -> Result
         thread::sleep(Duration::from_secs(1));
     }
 
-    let (raw, return_code) = pipe::service_set(CMD_SET_OPERATION_MODE, &[pipe::u32_arg(mode_code as u32)])?;
+    let (raw, return_code) =
+        pipe::service_set(CMD_SET_OPERATION_MODE, &[pipe::u32_arg(mode_code as u32)])?;
     if return_code != 0 && return_code != u32::MAX {
         bail!(
             "operation mode command failed with return_code={return_code} reply={}",
             hex(&raw)
         );
     }
-    registry::set_hklm_dword(registry::OVERCLOCK, "CurrentOperationMode", mode_code as u32)?;
+    registry::set_hklm_dword(
+        registry::OVERCLOCK,
+        "CurrentOperationMode",
+        mode_code as u32,
+    )?;
     Ok(())
 }
 
 pub fn read_state() -> Result<OperationModeState> {
-    let (_, value) = pipe::service_get_u64(CMD_GET_GAMING_MISC_SETTING, &[pipe::u32_arg(OPERATION_MODE_QUERY)])?;
+    let (_, value) = pipe::service_get_u64(
+        CMD_GET_GAMING_MISC_SETTING,
+        &[pipe::u32_arg(OPERATION_MODE_QUERY)],
+    )?;
     let status = (value & 0xFF) as u8;
     let mode_code = ((value >> 8) & 0xFF) as u8;
     Ok(OperationModeState {
@@ -53,7 +61,11 @@ fn try_set_whispermode(enabled: bool) -> Result<()> {
     let mut last_error = None;
     for session_id in session::candidate_session_ids() {
         let pipe_name = session::admin_pipe_name(session_id);
-        match pipe::send_fire_and_forget(&pipe_name, CMD_ADMIN_SET_WHISPERMODE, &[pipe::u32_arg(enabled as u32)]) {
+        match pipe::send_fire_and_forget(
+            &pipe_name,
+            CMD_ADMIN_SET_WHISPERMODE,
+            &[pipe::u32_arg(enabled as u32)],
+        ) {
             Ok(()) => return Ok(()),
             Err(error) => last_error = Some(error),
         }

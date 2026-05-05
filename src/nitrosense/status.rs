@@ -66,7 +66,8 @@ pub fn read_status() -> AppStatus {
     let sticky = keyboard::read_sticky_keys();
     let win_menu = keyboard::read_win_menu_lock();
     let mode_state = mode::read_state();
-    let persisted_mode = registry::read_hklm_dword(registry::OVERCLOCK, "CurrentOperationMode").ok();
+    let persisted_mode =
+        registry::read_hklm_dword(registry::OVERCLOCK, "CurrentOperationMode").ok();
     let sound_state = sound::read_state();
 
     AppStatus {
@@ -161,7 +162,10 @@ pub fn print_text(status: &AppStatus) {
     print_item("persisted_state", &status.keyboard.persisted_state);
     print_item("live_zone_status", &status.keyboard.live_zone_status);
     print_item("sticky_keys_live", &status.keyboard.sticky_keys_live);
-    print_item("win_menu_key_lock_live", &status.keyboard.win_menu_key_lock_live);
+    print_item(
+        "win_menu_key_lock_live",
+        &status.keyboard.win_menu_key_lock_live,
+    );
     println!();
     println!("[mode]");
     print_item("live_mode", &status.mode.live_mode);
@@ -174,7 +178,12 @@ pub fn print_text(status: &AppStatus) {
     print_item("live_preset", &status.sound.live_preset);
 }
 
-fn status_from_result<T: Serialize>(result: anyhow::Result<T>, source: &str, reliability: Reliability, note: Option<String>) -> Status<Option<T>> {
+fn status_from_result<T: Serialize>(
+    result: anyhow::Result<T>,
+    source: &str,
+    reliability: Reliability,
+    note: Option<String>,
+) -> Status<Option<T>> {
     match result {
         Ok(value) => Status {
             value: Some(value),
@@ -199,8 +208,7 @@ fn print_item<T: Serialize>(name: &str, item: &Status<T>) {
     let value = serde_json::to_string(&item.value).unwrap_or_else(|_| "null".to_string());
     println!(
         "{name}={value} source={} reliability={:?}",
-        item.source,
-        item.reliability
+        item.source, item.reliability
     );
     if let Some(note) = &item.note {
         println!("{name}_note={note}");

@@ -32,7 +32,10 @@ pub fn set_preset(backend: SoundBackend, preset: SoundPreset) -> Result<()> {
     thread::sleep(Duration::from_millis(100));
     let state = read_backend(resolved)?;
     if state.mode_code != mode_code as i32 {
-        bail!("sound preset verification failed: expected {mode_code}, got {}", state.mode_code);
+        bail!(
+            "sound preset verification failed: expected {mode_code}, got {}",
+            state.mode_code
+        );
     }
     Ok(())
 }
@@ -159,7 +162,13 @@ mod tests {
 
     #[test]
     fn maps_dts_presets() {
-        assert_eq!(preset_code(SoundBackend::Dts, SoundPreset::Shooter).unwrap(), 5);
-        assert_eq!(preset_code(SoundBackend::Dts, SoundPreset::Auto).unwrap(), 10);
+        assert_eq!(
+            preset_code(SoundBackend::Dts, SoundPreset::Shooter).unwrap(),
+            5
+        );
+        assert_eq!(
+            preset_code(SoundBackend::Dts, SoundPreset::Auto).unwrap(),
+            10
+        );
     }
 }

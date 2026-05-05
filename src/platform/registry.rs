@@ -44,7 +44,8 @@ mod platform {
     use anyhow::bail;
     use windows_sys::Win32::Foundation::ERROR_SUCCESS;
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_DWORD, REG_SZ, RegCloseKey, RegOpenKeyExW, RegQueryValueExW,
+        HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_DWORD, REG_SZ, RegCloseKey, RegOpenKeyExW,
+        RegQueryValueExW,
     };
 
     pub fn read_hklm_dword(path: &str, name: &str) -> Result<u32> {
@@ -124,8 +125,10 @@ mod platform {
     impl HklmKey {
         fn open(path: &str) -> Result<Self> {
             let path_w = wide(path);
-        let mut key: HKEY = std::ptr::null_mut();
-            let status = unsafe { RegOpenKeyExW(HKEY_LOCAL_MACHINE, path_w.as_ptr(), 0, KEY_READ, &mut key) };
+            let mut key: HKEY = std::ptr::null_mut();
+            let status = unsafe {
+                RegOpenKeyExW(HKEY_LOCAL_MACHINE, path_w.as_ptr(), 0, KEY_READ, &mut key)
+            };
             if status != ERROR_SUCCESS {
                 bail!("RegOpenKeyExW failed with status {status}");
             }

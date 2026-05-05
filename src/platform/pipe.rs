@@ -30,7 +30,11 @@ pub fn u64_arg(value: u64) -> Vec<u8> {
 }
 
 pub fn utf16_string_arg(value: &str) -> Vec<u8> {
-    value.encode_utf16().chain(std::iter::once(0)).flat_map(u16::to_le_bytes).collect()
+    value
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .flat_map(u16::to_le_bytes)
+        .collect()
 }
 
 pub fn service_set(cmd_code: u16, args: &[Vec<u8>]) -> Result<(Vec<u8>, u32)> {
@@ -41,7 +45,12 @@ pub fn service_get_u64(cmd_code: u16, args: &[Vec<u8>]) -> Result<(Vec<u8>, u64)
     send_get_u64(SERVICE_PIPE_NAME, cmd_code, args, GET_REPLY_SIZE)
 }
 
-pub fn send_set(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>], reply_size: usize) -> Result<(Vec<u8>, u32)> {
+pub fn send_set(
+    pipe_name: &str,
+    cmd_code: u16,
+    args: &[Vec<u8>],
+    reply_size: usize,
+) -> Result<(Vec<u8>, u32)> {
     let raw = send_with_reply(pipe_name, cmd_code, args, reply_size)?;
     if raw.len() < 9 {
         bail!("set reply too short: {} bytes", raw.len());
@@ -49,7 +58,12 @@ pub fn send_set(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>], reply_size: us
     Ok((raw.clone(), u32::from_le_bytes(raw[5..9].try_into()?)))
 }
 
-pub fn send_get_u64(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>], reply_size: usize) -> Result<(Vec<u8>, u64)> {
+pub fn send_get_u64(
+    pipe_name: &str,
+    cmd_code: u16,
+    args: &[Vec<u8>],
+    reply_size: usize,
+) -> Result<(Vec<u8>, u64)> {
     let raw = send_with_reply(pipe_name, cmd_code, args, reply_size)?;
     if raw.len() < 13 {
         bail!("get reply too short: {} bytes", raw.len());
@@ -62,9 +76,15 @@ pub fn send_fire_and_forget(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>]) ->
     platform::write_only(pipe_name, &request).with_context(|| format!("writing to {pipe_name}"))
 }
 
-fn send_with_reply(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>], reply_size: usize) -> Result<Vec<u8>> {
+fn send_with_reply(
+    pipe_name: &str,
+    cmd_code: u16,
+    args: &[Vec<u8>],
+    reply_size: usize,
+) -> Result<Vec<u8>> {
     let request = build_message(cmd_code, args)?;
-    platform::write_read(pipe_name, &request, reply_size).with_context(|| format!("pipe command {cmd_code} on {pipe_name}"))
+    platform::write_read(pipe_name, &request, reply_size)
+        .with_context(|| format!("pipe command {cmd_code} on {pipe_name}"))
 }
 
 #[cfg(windows)]
@@ -132,7 +152,9 @@ mod platform {
                 )
             };
             if ok == 0 {
-                bail!("WriteFile failed: Windows error {}", unsafe { GetLastError() });
+                bail!("WriteFile failed: Windows error {}", unsafe {
+                    GetLastError()
+                });
             }
             if written as usize != request.len() {
                 bail!("short pipe write: wrote {written} of {}", request.len());
@@ -153,7 +175,9 @@ mod platform {
                 )
             };
             if ok == 0 {
-                bail!("ReadFile failed: Windows error {}", unsafe { GetLastError() });
+                bail!("ReadFile failed: Windows error {}", unsafe {
+                    GetLastError()
+                });
             }
             if read as usize != reply_size {
                 bail!("unexpected reply size: {read}");

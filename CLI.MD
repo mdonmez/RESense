@@ -8,8 +8,8 @@ resense
 │   └── speed [--cpu N] [--gpu N] [--cpu-auto] [--gpu-auto]
 ├── keyboard
 │   ├── brightness {1-5}
-│   ├── static --zone1..4 HEXCOLORS [--brightness {1-5}]
-│   ├── dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--brightness] [--color] [--direction {left,right}]
+│   ├── static --zone1..4 HEXCOLORS
+│   ├── dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--color] [--direction {fromleft,fromright}]
 │   ├── sticky {enable,disable}
 │   └── win-menu {enable,disable}
 ├── mode {quiet,default,performance} [--skip-whispermode]
@@ -76,16 +76,16 @@ Set 4-zone static lighting. Each zone accepts a 6-digit hex color (e.g., `FF0000
 - `--zone3 HEXCOLOR` - Zone 3 color
 - `--zone4 HEXCOLOR` - Zone 4 color
 
-Updates static keyboard lighting according to the selected zone colors.
+Updates static keyboard lighting according to the selected zone colors. This command preserves the current keyboard brightness.
 
-### `resense keyboard dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--color HEXCOLOR] [--direction {left,right}]`
+### `resense keyboard dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--color HEXCOLOR] [--direction {fromleft,fromright}]`
 
 Set dynamic keyboard lighting effect.
 
 - `mode` - Dynamic effect: `breathing`, `neon`, `shifting`, `wave`, `zoom`
 - `--speed {1-5}` - Effect speed (required, 1=slowest, 5=fastest)
 
-Updates dynamic keyboard lighting according to the selected effect, speed, color, and direction. `--color` is required for only `breathing`, `wave`, `shifting`, and `zoom`, but not used by `neon`. `--direction` is required for `wave` and `shifting`, but ignored by other modes. Providing wrong flags for a mode will raise an error.
+Updates dynamic keyboard lighting according to the selected effect, speed, color, and direction while preserving the current keyboard brightness. `--color` is required for only `breathing`, `wave`, `shifting`, and `zoom`, but not used by `neon`. `--direction` is required for `wave` and `shifting`, but ignored by other modes. Providing wrong flags for a mode will raise an error.
 
 ### `resense keyboard sticky {enable,disable}`
 

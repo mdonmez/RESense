@@ -47,16 +47,40 @@ pub struct KeyboardState {
 }
 
 pub fn set_brightness(level: u8) -> Result<()> {
-    let encoded = encode_brightness(level);
-    let (raw, return_code) = pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(encoded)])?;
-    ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
-    sync_brightness_to_system_xml(level)?;
+    let current = read_state()?;
+
+    if current.mode == "dynamic" {
+        let dynamic = current
+            .dynamic
+            .as_ref()
+            .context("dynamic keyboard state is missing persisted effect details")?;
+        let args = dynamic_args_from_state(dynamic)?;
+        let payload = encode_dynamic_payload(&args, level)?;
+        let (raw, return_code) =
+            pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(payload)])?;
+        ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
+        sync_dynamic_to_system_xml(&args, level)?;
+    } else {
+        let encoded = encode_brightness(level);
+        let (raw, return_code) =
+            pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(encoded)])?;
+        ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
+        sync_brightness_to_system_xml(level)?;
+    }
+
     Ok(())
 }
 
 pub fn set_static(args: &KeyboardStaticArgs) -> Result<KeyboardState> {
-    let zones = build_zones(args)?;
-    set_brightness(args.brightness)?;
+    let current = read_state()?;
+    let zones = build_static_zones(args, &current)?;
+
+    // Command 27 is still needed to leave dynamic mode; we just reuse the current brightness.
+    let encoded_brightness = encode_brightness(current.brightness);
+    let (raw, return_code) =
+        pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(encoded_brightness)])?;
+    ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
+
     let behavior = encode_zone_behavior(&zones);
     let (raw, return_code) = pipe::service_set(CMD_SET_LED_BEHAVIOR, &[pipe::u64_arg(behavior)])?;
     ensure_success(CMD_SET_LED_BEHAVIOR, &raw, return_code)?;
@@ -69,21 +93,26 @@ pub fn set_static(args: &KeyboardStaticArgs) -> Result<KeyboardState> {
         }
     }
 
-    sync_static_to_system_xml(&zones, args.brightness)
+    sync_static_to_system_xml(&zones, current.brightness)
 }
 
 pub fn set_dynamic(args: &KeyboardDynamicArgs) -> Result<KeyboardState> {
-    let payload = encode_dynamic_payload(args)?;
+    let current = read_state()?;
+    let payload = encode_dynamic_payload(args, current.brightness)?;
     let (raw, return_code) = pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(payload)])?;
     ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
-    sync_dynamic_to_system_xml(args)
+    sync_dynamic_to_system_xml(args, current.brightness)
 }
 
 pub fn set_sticky_keys(enabled: bool) -> Result<()> {
     let mut last_error = None;
     for session_id in session::candidate_session_ids() {
         let pipe_name = session::admin_pipe_name(session_id);
-        match pipe::send_fire_and_forget(&pipe_name, CMD_ADMIN_SET_STICKY_KEYS, &[pipe::u32_arg(enabled as u32)]) {
+        match pipe::send_fire_and_forget(
+            &pipe_name,
+            CMD_ADMIN_SET_STICKY_KEYS,
+            &[pipe::u32_arg(enabled as u32)],
+        ) {
             Ok(()) => {
                 registry::set_hklm_dword(registry::ADVANCED_SETTINGS, "StickyKey", enabled as u32)?;
                 return Ok(());
@@ -127,7 +156,10 @@ pub fn read_sticky_keys() -> Result<sticky_keys::StickyKeysState> {
 }
 
 pub fn read_win_menu_lock() -> Result<bool> {
-    let (_, value) = pipe::service_get_u64(CMD_GET_GAMING_PROFILE, &[pipe::u32_arg(QUERY_GAMING_PROFILE)])?;
+    let (_, value) = pipe::service_get_u64(
+        CMD_GET_GAMING_PROFILE,
+        &[pipe::u32_arg(QUERY_GAMING_PROFILE)],
+    )?;
     Ok(((value >> WIN_MENU_STATUS_SHIFT) & 0xFF) == 1)
 }
 
@@ -135,7 +167,7 @@ pub fn encode_brightness(level: u8) -> u64 {
     (((level - 1) as u64) * 25) << 16
 }
 
-pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs) -> Result<u64> {
+pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs, brightness: u8) -> Result<u64> {
     let (selector, uses_color, uses_direction, wave_flag) = match args.mode {
         KeyboardDynamicMode::Breathing => (1, true, false, 0),
         KeyboardDynamicMode::Neon => (2, false, false, 0),
@@ -146,7 +178,7 @@ pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs) -> Result<u64> {
 
     let mut payload = selector as u64;
     payload |= (args.speed as u64) << 8;
-    payload |= (((args.brightness - 1) as u64) * 25) << 16;
+    payload |= (((brightness - 1) as u64) * 25) << 16;
     payload |= wave_flag;
 
     if uses_direction {
@@ -155,7 +187,10 @@ pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs) -> Result<u64> {
     }
 
     if uses_color {
-        let color = args.color.as_deref().context("dynamic mode requires color")?;
+        let color = args
+            .color
+            .as_deref()
+            .context("dynamic mode requires color")?;
         let (red, green, blue) = adjusted_rgb(color)?;
         payload |= (red as u64) << 40;
         payload |= (green as u64) << 48;
@@ -165,23 +200,48 @@ pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs) -> Result<u64> {
     Ok(payload)
 }
 
-fn build_zones(args: &KeyboardStaticArgs) -> Result<Vec<ZoneState>> {
+fn dynamic_args_from_state(state: &DynamicState) -> Result<KeyboardDynamicArgs> {
+    Ok(KeyboardDynamicArgs {
+        mode: parse_dynamic_mode(&state.mode)?,
+        speed: state.speed,
+        color: state.color.clone(),
+        direction: parse_direction(state.direction.as_deref())?,
+    })
+}
+
+fn build_static_zones(
+    args: &KeyboardStaticArgs,
+    current: &KeyboardState,
+) -> Result<Vec<ZoneState>> {
     let values = [
         (1, args.zone1.as_deref()),
         (2, args.zone2.as_deref()),
         (3, args.zone3.as_deref()),
         (4, args.zone4.as_deref()),
     ];
-    values
-        .into_iter()
-        .filter_map(|(index, color)| color.map(|color| (index, color)))
-        .map(|(index, color)| {
-            let normalized = normalize_color(color)?;
-            Ok(ZoneState {
-                index,
-                status: normalized != "off",
-                color: normalized,
-            })
+
+    current
+        .static_zones
+        .iter()
+        .map(|zone| {
+            let override_color = values[(zone.index - 1) as usize].1;
+            match override_color {
+                Some(color) => {
+                    let normalized = normalize_color(color)?;
+                    Ok(ZoneState {
+                        index: zone.index,
+                        status: normalized != "off",
+                        color: zone.color.clone(),
+                    })
+                    .map(|mut updated| {
+                        if updated.status {
+                            updated.color = normalized;
+                        }
+                        updated
+                    })
+                }
+                None => Ok(zone.clone()),
+            }
         })
         .collect()
 }
@@ -261,12 +321,16 @@ fn read_zone_color_adjustment() -> Result<(f32, f32, f32)> {
 }
 
 fn active_profile_name() -> Result<String> {
-    Ok(registry::read_hklm_string(registry::LIGHT_SETTING, "LightingProfile")
-        .unwrap_or_else(|_| "Default".to_string()))
+    Ok(
+        registry::read_hklm_string(registry::LIGHT_SETTING, "LightingProfile")
+            .unwrap_or_else(|_| "Default".to_string()),
+    )
 }
 
 fn system_profile_xml_path() -> Result<PathBuf> {
-    Ok(PathBuf::from(SYSTEM_PROFILE_ROOT).join(active_profile_name()?).join("Main.xml"))
+    Ok(PathBuf::from(SYSTEM_PROFILE_ROOT)
+        .join(active_profile_name()?)
+        .join("Main.xml"))
 }
 
 fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
@@ -274,7 +338,11 @@ fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
     let key = child(&root, "Key")?;
     let lighting = child(&root, "LightingEffects")?;
     let pattern = child(&root, "Pattern")?;
-    let mode = if attr_u8(key, "status")? == 0 { "static" } else { "dynamic" };
+    let mode = if attr_u8(key, "status")? == 0 {
+        "static"
+    } else {
+        "dynamic"
+    };
     let brightness = attr_u8(lighting, "brightness")?;
     let mut static_zones = Vec::new();
     for index in 1..=4 {
@@ -310,8 +378,12 @@ fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
 
 fn sync_brightness_to_system_xml(brightness: u8) -> Result<KeyboardState> {
     mutate_profile_xml(|root| {
-        child_mut(root, "Key")?.attributes.insert("brightness".to_string(), brightness.to_string());
-        child_mut(root, "LightingEffects")?.attributes.insert("brightness".to_string(), brightness.to_string());
+        child_mut(root, "Key")?
+            .attributes
+            .insert("brightness".to_string(), brightness.to_string());
+        child_mut(root, "LightingEffects")?
+            .attributes
+            .insert("brightness".to_string(), brightness.to_string());
         Ok(())
     })
 }
@@ -320,55 +392,76 @@ fn sync_static_to_system_xml(zones: &[ZoneState], brightness: u8) -> Result<Keyb
     mutate_profile_xml(|root| {
         let key = child_mut(root, "Key")?;
         key.attributes.insert("status".to_string(), "0".to_string());
-        key.attributes.insert("brightness".to_string(), brightness.to_string());
-        if let Some(first_enabled) = zones.iter().find(|zone| zone.status).map(|zone| zone.color.clone()) {
+        key.attributes
+            .insert("brightness".to_string(), brightness.to_string());
+        if let Some(first_enabled) = zones
+            .iter()
+            .find(|zone| zone.status)
+            .map(|zone| zone.color.clone())
+        {
             for index in 0..COLOR_TAG_COUNT {
                 if let Ok(tag) = child_mut(key, &format!("Tag{index}")) {
-                    tag.attributes.insert("color".to_string(), first_enabled.clone());
+                    tag.attributes
+                        .insert("color".to_string(), first_enabled.clone());
                 }
             }
         }
         let lighting = child_mut(root, "LightingEffects")?;
-        lighting.attributes.insert("brightness".to_string(), brightness.to_string());
+        lighting
+            .attributes
+            .insert("brightness".to_string(), brightness.to_string());
         for zone in zones {
             let node = child_mut(lighting, &format!("LightingEffects_Zone{}", zone.index))?;
-            node.attributes.insert("status".to_string(), (zone.status as u8).to_string());
+            node.attributes
+                .insert("status".to_string(), (zone.status as u8).to_string());
             if zone.status {
-                node.attributes.insert("color".to_string(), zone.color.clone());
+                node.attributes
+                    .insert("color".to_string(), zone.color.clone());
             }
         }
         Ok(())
     })
 }
 
-fn sync_dynamic_to_system_xml(args: &KeyboardDynamicArgs) -> Result<KeyboardState> {
+fn sync_dynamic_to_system_xml(args: &KeyboardDynamicArgs, brightness: u8) -> Result<KeyboardState> {
     mutate_profile_xml(|root| {
         let pattern_index = pattern_index(args.mode);
         let key = child_mut(root, "Key")?;
         key.attributes.insert("status".to_string(), "1".to_string());
-        key.attributes.insert("brightness".to_string(), args.brightness.to_string());
+        key.attributes
+            .insert("brightness".to_string(), brightness.to_string());
         if let Some(color) = &args.color {
             let normalized = normalize_color(color)?;
             for index in 0..COLOR_TAG_COUNT {
                 if let Ok(tag) = child_mut(key, &format!("Tag{index}")) {
-                    tag.attributes.insert("color".to_string(), normalized.clone());
+                    tag.attributes
+                        .insert("color".to_string(), normalized.clone());
                 }
             }
         }
         let pattern = child_mut(root, "Pattern")?;
-        pattern.attributes.insert("selected".to_string(), pattern_index.to_string());
+        pattern
+            .attributes
+            .insert("selected".to_string(), pattern_index.to_string());
         if let Some(color) = &args.color {
-            pattern.attributes.insert("color".to_string(), normalize_color(color)?);
+            pattern
+                .attributes
+                .insert("color".to_string(), normalize_color(color)?);
         }
         let selected = child_mut(pattern, &format!("Pattern{pattern_index}"))?;
-        selected.attributes.insert("speed".to_string(), args.speed.to_string());
+        selected
+            .attributes
+            .insert("speed".to_string(), args.speed.to_string());
         selected.attributes.insert(
             "direction".to_string(),
-            args.direction.map(xml_direction_code).unwrap_or(0).to_string(),
+            args.direction
+                .map(xml_direction_code)
+                .unwrap_or(0)
+                .to_string(),
         );
         child_mut(root, "LightingEffects")?
             .attributes
-            .insert("brightness".to_string(), args.brightness.to_string());
+            .insert("brightness".to_string(), brightness.to_string());
         Ok(())
     })
 }
@@ -378,7 +471,8 @@ fn mutate_profile_xml(mutator: impl FnOnce(&mut Element) -> Result<()>) -> Resul
     let mut root = read_xml(&path)?;
     mutator(&mut root)?;
     let mut file = File::create(&path).with_context(|| format!("opening {}", path.display()))?;
-    root.write(&mut file).with_context(|| format!("writing {}", path.display()))?;
+    root.write(&mut file)
+        .with_context(|| format!("writing {}", path.display()))?;
     parse_profile_state(&path)
 }
 
@@ -388,21 +482,33 @@ fn read_xml(path: &Path) -> Result<Element> {
 }
 
 fn child<'a>(element: &'a Element, name: &str) -> Result<&'a Element> {
-    element.children.iter().find_map(|node| match node {
-        XMLNode::Element(child) if child.name == name => Some(child),
-        _ => None,
-    }).with_context(|| format!("missing XML child {name}"))
+    element
+        .children
+        .iter()
+        .find_map(|node| match node {
+            XMLNode::Element(child) if child.name == name => Some(child),
+            _ => None,
+        })
+        .with_context(|| format!("missing XML child {name}"))
 }
 
 fn child_mut<'a>(element: &'a mut Element, name: &str) -> Result<&'a mut Element> {
-    element.children.iter_mut().find_map(|node| match node {
-        XMLNode::Element(child) if child.name == name => Some(child),
-        _ => None,
-    }).with_context(|| format!("missing XML child {name}"))
+    element
+        .children
+        .iter_mut()
+        .find_map(|node| match node {
+            XMLNode::Element(child) if child.name == name => Some(child),
+            _ => None,
+        })
+        .with_context(|| format!("missing XML child {name}"))
 }
 
 fn attr<'a>(element: &'a Element, name: &str) -> Result<&'a str> {
-    element.attributes.get(name).map(String::as_str).with_context(|| format!("missing XML attribute {name}"))
+    element
+        .attributes
+        .get(name)
+        .map(String::as_str)
+        .with_context(|| format!("missing XML attribute {name}"))
 }
 
 fn attr_u8(element: &Element, name: &str) -> Result<u8> {
@@ -430,10 +536,30 @@ fn pattern_name(index: usize) -> &'static str {
     }
 }
 
+fn parse_dynamic_mode(value: &str) -> Result<KeyboardDynamicMode> {
+    match value {
+        "breathing" => Ok(KeyboardDynamicMode::Breathing),
+        "wave" => Ok(KeyboardDynamicMode::Wave),
+        "zoom" => Ok(KeyboardDynamicMode::Zoom),
+        "shifting" => Ok(KeyboardDynamicMode::Shifting),
+        "neon" => Ok(KeyboardDynamicMode::Neon),
+        _ => bail!("unsupported persisted dynamic mode {value}"),
+    }
+}
+
+fn parse_direction(value: Option<&str>) -> Result<Option<Direction>> {
+    match value {
+        Some("fromleft") => Ok(Some(Direction::FromLeft)),
+        Some("fromright") => Ok(Some(Direction::FromRight)),
+        Some("none") | None => Ok(None),
+        Some(other) => bail!("unsupported persisted dynamic direction {other}"),
+    }
+}
+
 fn direction_code(direction: Direction) -> u64 {
     match direction {
-        Direction::Left => 1,
-        Direction::Right => 2,
+        Direction::FromLeft => 1,
+        Direction::FromRight => 2,
     }
 }
 
@@ -443,8 +569,8 @@ fn xml_direction_code(direction: Direction) -> u8 {
 
 fn direction_name(code: u8) -> &'static str {
     match code {
-        1 => "left",
-        2 => "right",
+        1 => "fromleft",
+        2 => "fromright",
         0 => "none",
         _ => "unknown",
     }
@@ -462,7 +588,10 @@ fn zone_id(index: u8) -> u64 {
 
 fn ensure_success(cmd: u16, raw: &[u8], return_code: u32) -> Result<()> {
     if return_code != 0 {
-        bail!("PredatorSense command {cmd} failed with return_code={return_code} reply={}", hex(raw));
+        bail!(
+            "PredatorSense command {cmd} failed with return_code={return_code} reply={}",
+            hex(raw)
+        );
     }
     Ok(())
 }
@@ -485,5 +614,145 @@ mod tests {
     fn parses_color() {
         assert_eq!(normalize_color("ff00aa").unwrap(), "#FF00AA");
         assert_eq!(normalize_color("off").unwrap(), "off");
+    }
+
+    #[test]
+    fn merges_partial_static_update_without_touching_other_zones() {
+        let args = KeyboardStaticArgs {
+            zone1: Some("FFFFFF".to_string()),
+            zone2: None,
+            zone3: None,
+            zone4: None,
+        };
+        let current = KeyboardState {
+            mode: "static".to_string(),
+            brightness: 3,
+            static_zones: vec![
+                ZoneState {
+                    index: 1,
+                    status: true,
+                    color: "#FF0000".to_string(),
+                },
+                ZoneState {
+                    index: 2,
+                    status: true,
+                    color: "#00FF00".to_string(),
+                },
+                ZoneState {
+                    index: 3,
+                    status: true,
+                    color: "#0000FF".to_string(),
+                },
+                ZoneState {
+                    index: 4,
+                    status: false,
+                    color: "#ABCDEF".to_string(),
+                },
+            ],
+            dynamic: None,
+            profile_xml: String::new(),
+        };
+
+        let zones = build_static_zones(&args, &current).unwrap();
+
+        assert_eq!(zones[0].color, "#FFFFFF");
+        assert!(zones[0].status);
+        assert_eq!(zones[1].color, "#00FF00");
+        assert!(zones[1].status);
+        assert_eq!(zones[2].color, "#0000FF");
+        assert!(zones[2].status);
+        assert_eq!(zones[3].color, "#ABCDEF");
+        assert!(!zones[3].status);
+    }
+
+    #[test]
+    fn disabling_zone_preserves_last_color_for_xml_state() {
+        let args = KeyboardStaticArgs {
+            zone1: None,
+            zone2: Some("off".to_string()),
+            zone3: None,
+            zone4: None,
+        };
+        let current = KeyboardState {
+            mode: "static".to_string(),
+            brightness: 4,
+            static_zones: vec![
+                ZoneState {
+                    index: 1,
+                    status: true,
+                    color: "#FF0000".to_string(),
+                },
+                ZoneState {
+                    index: 2,
+                    status: true,
+                    color: "#F7B801".to_string(),
+                },
+                ZoneState {
+                    index: 3,
+                    status: true,
+                    color: "#0000FF".to_string(),
+                },
+                ZoneState {
+                    index: 4,
+                    status: true,
+                    color: "#FFFFFF".to_string(),
+                },
+            ],
+            dynamic: None,
+            profile_xml: String::new(),
+        };
+
+        let zones = build_static_zones(&args, &current).unwrap();
+
+        assert!(!zones[1].status);
+        assert_eq!(zones[1].color, "#F7B801");
+    }
+
+    #[test]
+    fn dynamic_payload_uses_existing_brightness() {
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Wave,
+            speed: 4,
+            color: Some("00AEEF".to_string()),
+            direction: Some(Direction::FromLeft),
+        };
+
+        let payload = encode_dynamic_payload(&args, 3).unwrap();
+
+        assert_eq!(payload & (0xFFu64 << 16), 50u64 << 16);
+    }
+
+    #[test]
+    fn rebuilds_dynamic_args_from_persisted_state() {
+        let state = DynamicState {
+            mode: "wave".to_string(),
+            speed: 4,
+            brightness: 2,
+            color: Some("#00AEEF".to_string()),
+            direction: Some("fromleft".to_string()),
+        };
+
+        let args = dynamic_args_from_state(&state).unwrap();
+
+        assert_eq!(args.mode, KeyboardDynamicMode::Wave);
+        assert_eq!(args.speed, 4);
+        assert_eq!(args.color.as_deref(), Some("#00AEEF"));
+        assert_eq!(args.direction, Some(Direction::FromLeft));
+    }
+
+    #[test]
+    fn rebuilds_neon_dynamic_args_without_direction() {
+        let state = DynamicState {
+            mode: "neon".to_string(),
+            speed: 5,
+            brightness: 4,
+            color: Some("#FFFFFF".to_string()),
+            direction: Some("none".to_string()),
+        };
+
+        let args = dynamic_args_from_state(&state).unwrap();
+
+        assert_eq!(args.mode, KeyboardDynamicMode::Neon);
+        assert_eq!(args.direction, None);
     }
 }

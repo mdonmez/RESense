@@ -15,7 +15,10 @@ pub fn candidate_session_ids() -> Vec<u32> {
     if let Ok(entries) = std::fs::read_dir(r"\\.\pipe\") {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if let Some(id) = name.strip_prefix("PredatorSense_admin_agent_").and_then(|raw| raw.parse::<u32>().ok()) {
+            if let Some(id) = name
+                .strip_prefix("PredatorSense_admin_agent_")
+                .and_then(|raw| raw.parse::<u32>().ok())
+            {
                 ids.push(id);
             }
         }
@@ -46,7 +49,9 @@ mod platform {
         let mut session_id = 0u32;
         let ok = unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session_id) };
         if ok == 0 {
-            bail!("ProcessIdToSessionId failed: Windows error {}", unsafe { GetLastError() });
+            bail!("ProcessIdToSessionId failed: Windows error {}", unsafe {
+                GetLastError()
+            });
         }
         Ok(session_id)
     }

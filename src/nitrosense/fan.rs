@@ -79,7 +79,8 @@ pub fn set_mode(mode: FanMode) -> Result<()> {
         FanMode::Auto => (FAN_MODE_AUTO_ENCODED, AUTO_MODE_CODE),
         FanMode::Max => (FAN_MODE_MAX_ENCODED, MAX_MODE_CODE),
     };
-    let (raw, return_code) = pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(encoded)])?;
+    let (raw, return_code) =
+        pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(encoded)])?;
     ensure_success(CMD_SET_FAN_GROUP_BEHAVIOR, &raw, return_code)?;
     registry::set_hklm_dword(registry::FAN_CONTROL, "CurrentFanMode", mode_code)?;
     Ok(())
@@ -107,7 +108,10 @@ pub fn set_speed(args: &FanSpeedArgs) -> Result<FanSpeedResult> {
     }
 
     if merged[&FanGroup::Cpu].auto && merged[&FanGroup::Gpu].auto {
-        let (raw, return_code) = pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(FAN_MODE_AUTO_ENCODED)])?;
+        let (raw, return_code) = pipe::service_set(
+            CMD_SET_FAN_GROUP_BEHAVIOR,
+            &[pipe::u64_arg(FAN_MODE_AUTO_ENCODED)],
+        )?;
         ensure_success(CMD_SET_FAN_GROUP_BEHAVIOR, &raw, return_code)?;
         sync_custom_registry(&merged, AUTO_MODE_CODE)?;
         return Ok(FanSpeedResult {
@@ -118,13 +122,15 @@ pub fn set_speed(args: &FanSpeedArgs) -> Result<FanSpeedResult> {
     }
 
     let encoded = encode_exact_custom_behavior(&merged);
-    let (raw, return_code) = pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(encoded)])?;
+    let (raw, return_code) =
+        pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(encoded)])?;
     ensure_success(CMD_SET_FAN_GROUP_BEHAVIOR, &raw, return_code)?;
 
     for (group, state) in &updates {
         if !state.auto {
             let speed = encode_custom_speed(*group, state.percent);
-            let (raw, return_code) = pipe::service_set(CMD_SET_FAN_GROUP_SPEED, &[pipe::u64_arg(speed)])?;
+            let (raw, return_code) =
+                pipe::service_set(CMD_SET_FAN_GROUP_SPEED, &[pipe::u64_arg(speed)])?;
             ensure_success(CMD_SET_FAN_GROUP_SPEED, &raw, return_code)?;
         }
     }
@@ -173,12 +179,25 @@ fn read_health(index: u32) -> Result<HealthValue> {
 }
 
 fn read_live_mode_probe() -> Result<LiveModeProbe> {
-    let (raw, _) = pipe::service_get_u64(CMD_GET_GAMING_PROFILE_CONFIG, &[pipe::u32_arg(LIVE_MODE_QUERY)])?;
-    let mode_byte = *raw.get(7).context("live fan mode reply missing mode byte")?;
+    let (raw, _) = pipe::service_get_u64(
+        CMD_GET_GAMING_PROFILE_CONFIG,
+        &[pipe::u32_arg(LIVE_MODE_QUERY)],
+    )?;
+    let mode_byte = *raw
+        .get(7)
+        .context("live fan mode reply missing mode byte")?;
     let (mode_name, trusted, note) = match mode_byte {
         2 => ("max", true, "Live getter reliably reports Max."),
-        3 => ("custom", true, "Live getter reliably reports Custom when CPU fan control is manual."),
-        1 => ("auto_like", false, "Auto-like is ambiguous between true Auto and some mixed custom states."),
+        3 => (
+            "custom",
+            true,
+            "Live getter reliably reports Custom when CPU fan control is manual.",
+        ),
+        1 => (
+            "auto_like",
+            false,
+            "Auto-like is ambiguous between true Auto and some mixed custom states.",
+        ),
         _ => ("unknown", false, "Live mode probe is not fully decoded."),
     };
 
@@ -211,18 +230,46 @@ fn read_custom_state() -> Result<BTreeMap<FanGroup, FanCustomState>> {
 
 fn default_custom_state() -> BTreeMap<FanGroup, FanCustomState> {
     BTreeMap::from([
-        (FanGroup::Cpu, FanCustomState { percent: DEFAULT_PERCENT, auto: true }),
-        (FanGroup::Gpu, FanCustomState { percent: DEFAULT_PERCENT, auto: true }),
+        (
+            FanGroup::Cpu,
+            FanCustomState {
+                percent: DEFAULT_PERCENT,
+                auto: true,
+            },
+        ),
+        (
+            FanGroup::Gpu,
+            FanCustomState {
+                percent: DEFAULT_PERCENT,
+                auto: true,
+            },
+        ),
     ])
 }
 
 fn sync_custom_registry(state: &BTreeMap<FanGroup, FanCustomState>, mode_code: u32) -> Result<()> {
     registry::set_hklm_dwords(&[
         (registry::FAN_CONTROL, "CurrentFanMode", mode_code),
-        (registry::FAN_CONTROL, "CPUFanPercentage", state[&FanGroup::Cpu].percent as u32),
-        (registry::FAN_CONTROL, "CPUFanCustomAuto", state[&FanGroup::Cpu].auto as u32),
-        (registry::FAN_CONTROL, "GPU1FanPercentage", state[&FanGroup::Gpu].percent as u32),
-        (registry::FAN_CONTROL, "GPU1FanCustomAuto", state[&FanGroup::Gpu].auto as u32),
+        (
+            registry::FAN_CONTROL,
+            "CPUFanPercentage",
+            state[&FanGroup::Cpu].percent as u32,
+        ),
+        (
+            registry::FAN_CONTROL,
+            "CPUFanCustomAuto",
+            state[&FanGroup::Cpu].auto as u32,
+        ),
+        (
+            registry::FAN_CONTROL,
+            "GPU1FanPercentage",
+            state[&FanGroup::Gpu].percent as u32,
+        ),
+        (
+            registry::FAN_CONTROL,
+            "GPU1FanCustomAuto",
+            state[&FanGroup::Gpu].auto as u32,
+        ),
     ])
 }
 
@@ -231,8 +278,16 @@ pub fn encode_custom_speed(group: FanGroup, percent: u8) -> u64 {
 }
 
 pub fn encode_exact_custom_behavior(state: &BTreeMap<FanGroup, FanCustomState>) -> u64 {
-    let cpu = if state[&FanGroup::Cpu].auto { AUTO_BEHAVIOR_VALUE } else { MANUAL_BEHAVIOR_VALUE };
-    let gpu = if state[&FanGroup::Gpu].auto { CUSTOM_GPU_AUTO_FLAG } else { CUSTOM_GPU_MANUAL_FLAG };
+    let cpu = if state[&FanGroup::Cpu].auto {
+        AUTO_BEHAVIOR_VALUE
+    } else {
+        MANUAL_BEHAVIOR_VALUE
+    };
+    let gpu = if state[&FanGroup::Gpu].auto {
+        CUSTOM_GPU_AUTO_FLAG
+    } else {
+        CUSTOM_GPU_MANUAL_FLAG
+    };
     9 | ((gpu | cpu) << 16)
 }
 
@@ -256,7 +311,9 @@ fn describe_exact_mode(mode: &str, custom: &BTreeMap<FanGroup, FanCustomState>) 
     match mode {
         "auto" => "global_auto".to_string(),
         "max" => "max".to_string(),
-        "custom" if custom[&FanGroup::Cpu].auto && custom[&FanGroup::Gpu].auto => "custom_all_auto".to_string(),
+        "custom" if custom[&FanGroup::Cpu].auto && custom[&FanGroup::Gpu].auto => {
+            "custom_all_auto".to_string()
+        }
         "custom" if custom[&FanGroup::Cpu].auto => "custom_gpu_manual".to_string(),
         "custom" if custom[&FanGroup::Gpu].auto => "custom_cpu_manual".to_string(),
         "custom" => "custom_cpu_gpu_manual".to_string(),
@@ -266,7 +323,10 @@ fn describe_exact_mode(mode: &str, custom: &BTreeMap<FanGroup, FanCustomState>) 
 
 fn ensure_success(cmd: u16, raw: &[u8], return_code: u32) -> Result<()> {
     if return_code != 0 {
-        bail!("PredatorSense command {cmd} failed with return_code={return_code} reply={}", hex(raw));
+        bail!(
+            "PredatorSense command {cmd} failed with return_code={return_code} reply={}",
+            hex(raw)
+        );
     }
     Ok(())
 }
@@ -288,8 +348,20 @@ mod tests {
     #[test]
     fn encodes_exact_custom_behavior() {
         let state = BTreeMap::from([
-            (FanGroup::Cpu, FanCustomState { percent: 50, auto: false }),
-            (FanGroup::Gpu, FanCustomState { percent: 50, auto: true }),
+            (
+                FanGroup::Cpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: false,
+                },
+            ),
+            (
+                FanGroup::Gpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
         ]);
         assert_eq!(encode_exact_custom_behavior(&state), 0x430009);
     }

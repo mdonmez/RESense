@@ -102,8 +102,6 @@ pub struct KeyboardStaticArgs {
     pub zone3: Option<String>,
     #[arg(long, help = "Zone 4 color as a 6-digit hex value or off")]
     pub zone4: Option<String>,
-    #[arg(long, default_value_t = 5, help = "Keyboard brightness level from 1 to 5")]
-    pub brightness: u8,
 }
 
 #[derive(Args, Debug)]
@@ -112,11 +110,9 @@ pub struct KeyboardDynamicArgs {
     pub mode: KeyboardDynamicMode,
     #[arg(long, help = "Effect speed from 1 to 5")]
     pub speed: u8,
-    #[arg(long, default_value_t = 5, help = "Keyboard brightness level from 1 to 5")]
-    pub brightness: u8,
     #[arg(long, help = "Effect color as a 6-digit hex value")]
     pub color: Option<String>,
-    #[arg(long, help = "Effect direction")]
+    #[arg(long, help = "Effect direction: fromleft or fromright")]
     pub direction: Option<Direction>,
 }
 
@@ -147,7 +143,10 @@ pub enum DisplayCommands {
 pub struct BacklightTimeoutArgs {
     #[arg(help = "Enable or disable backlight timeout")]
     pub state: ToggleState,
-    #[arg(long = "brightness-percent", help = "Brightness percentage to use with timeout")]
+    #[arg(
+        long = "brightness-percent",
+        help = "Brightness percentage to use with timeout"
+    )]
     pub brightness_percent: Option<u8>,
 }
 
@@ -185,8 +184,8 @@ pub enum KeyboardDynamicMode {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
-    Left,
-    Right,
+    FromLeft,
+    FromRight,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]

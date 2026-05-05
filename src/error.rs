@@ -33,8 +33,11 @@ pub mod validate {
     }
 
     pub fn static_args(args: &KeyboardStaticArgs) -> Result<()> {
-        range("brightness", args.brightness, 1, 5)?;
-        if args.zone1.is_none() && args.zone2.is_none() && args.zone3.is_none() && args.zone4.is_none() {
+        if args.zone1.is_none()
+            && args.zone2.is_none()
+            && args.zone3.is_none()
+            && args.zone4.is_none()
+        {
             bail!("provide at least one of --zone1, --zone2, --zone3, or --zone4");
         }
         Ok(())
@@ -42,10 +45,12 @@ pub mod validate {
 
     pub fn dynamic_args(args: &KeyboardDynamicArgs) -> Result<()> {
         range("speed", args.speed, 1, 5)?;
-        range("brightness", args.brightness, 1, 5)?;
 
         let uses_color = !matches!(args.mode, KeyboardDynamicMode::Neon);
-        let uses_direction = matches!(args.mode, KeyboardDynamicMode::Wave | KeyboardDynamicMode::Shifting);
+        let uses_direction = matches!(
+            args.mode,
+            KeyboardDynamicMode::Wave | KeyboardDynamicMode::Shifting
+        );
 
         if uses_color && args.color.is_none() {
             bail!("{:?} mode requires --color RRGGBB", args.mode);
@@ -54,7 +59,10 @@ pub mod validate {
             bail!("{:?} mode does not use --color", args.mode);
         }
         if uses_direction && args.direction.is_none() {
-            bail!("{:?} mode requires --direction left or right", args.mode);
+            bail!(
+                "{:?} mode requires --direction fromleft or fromright",
+                args.mode
+            );
         }
         if !uses_direction && args.direction.is_some() {
             bail!("{:?} mode does not use --direction", args.mode);

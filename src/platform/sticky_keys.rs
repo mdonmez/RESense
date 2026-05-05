@@ -44,7 +44,9 @@ mod platform {
             )
         };
         if ok == 0 {
-            bail!("SystemParametersInfoW failed: Windows error {}", unsafe { GetLastError() });
+            bail!("SystemParametersInfoW failed: Windows error {}", unsafe {
+                GetLastError()
+            });
         }
         let enabled = (state.flags & SKF_STICKYKEYSON) == SKF_STICKYKEYSON;
         let hotkey_active = (state.flags & SKF_HOTKEYACTIVE) == SKF_HOTKEYACTIVE;
