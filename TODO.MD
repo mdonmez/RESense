@@ -11,6 +11,7 @@
 - [x] Quiet mode now forces fan auto and blocks further fan control to keep the mode semantically quiet. RESense intentionally does not copy NitroSense's AC/Battery-Boost lock on operation mode control.
 - [x] When brightness is changed with resense brightness command, the dynamic is overwritten and goes back to white static.
 - [ ] More information about reverse engineering and named pipes will be gathered and documented.
+- [ ] Entire CLI skeleton should be rethought to be more user-friendly, understandable, simple and intuitive.
 
 # New Feature Ideas
 
