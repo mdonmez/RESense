@@ -17,3 +17,5 @@ The purpose of this tool is to provide a working, programmable NitroSense GUI re
 ## Safety
 
 RESense is intended for the Acer Nitro 5 AN515-58 family. By default it checks the detected system model before running and refuses to start on other machines. Use `--dangerously-allow-any-model` only if you explicitly want to bypass that safeguard.
+
+RESense also checks that the NitroSense background service `PSSvc` (`Predator Service`) is installed and running before using the PredatorSense named pipes. If that service is stopped, disabled, or missing, RESense now fails with a clear warning instead of a low-level pipe error.

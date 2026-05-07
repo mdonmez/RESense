@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::platform::service;
 use anyhow::{Context, bail};
 
 pub const SERVICE_PIPE_NAME: &str = r"\\.\pipe\PredatorSense_service_namedpipe";
@@ -72,6 +73,7 @@ pub fn send_get_u64(
 }
 
 pub fn send_fire_and_forget(pipe_name: &str, cmd_code: u16, args: &[Vec<u8>]) -> Result<()> {
+    ensure_transport_available(pipe_name)?;
     let request = build_message(cmd_code, args)?;
     platform::write_only(pipe_name, &request).with_context(|| format!("writing to {pipe_name}"))
 }
@@ -82,9 +84,21 @@ fn send_with_reply(
     args: &[Vec<u8>],
     reply_size: usize,
 ) -> Result<Vec<u8>> {
+    ensure_transport_available(pipe_name)?;
     let request = build_message(cmd_code, args)?;
     platform::write_read(pipe_name, &request, reply_size)
         .with_context(|| format!("pipe command {cmd_code} on {pipe_name}"))
+}
+
+fn ensure_transport_available(pipe_name: &str) -> Result<()> {
+    if uses_predator_transport(pipe_name) {
+        service::ensure_predator_service_running()?;
+    }
+    Ok(())
+}
+
+fn uses_predator_transport(pipe_name: &str) -> bool {
+    pipe_name.contains("PredatorSense_") || pipe_name.contains("predatorsense_")
 }
 
 #[cfg(windows)]
@@ -220,5 +234,13 @@ mod tests {
         assert_eq!(message[2], 1);
         assert_eq!(&message[3..7], &8u32.to_le_bytes());
         assert_eq!(&message[7..15], &123u64.to_le_bytes());
+    }
+
+    #[test]
+    fn detects_predator_transport_names() {
+        assert!(uses_predator_transport(SERVICE_PIPE_NAME));
+        assert!(uses_predator_transport(r"\\.\pipe\PredatorSense_admin_agent_1"));
+        assert!(uses_predator_transport(r"\\.\pipe\predatorsense_service_namedpipe"));
+        assert!(!uses_predator_transport(r"\\.\pipe\something_else"));
     }
 }
