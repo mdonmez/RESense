@@ -44,7 +44,9 @@ pub mod validate {
     }
 
     pub fn dynamic_args(args: &KeyboardDynamicArgs) -> Result<()> {
-        range("speed", args.speed, 1, 5)?;
+        if let Some(speed) = args.speed {
+            range("speed", speed, 1, 5)?;
+        }
 
         let uses_color = !matches!(args.mode, KeyboardDynamicMode::Neon);
         let uses_direction = matches!(
@@ -52,17 +54,8 @@ pub mod validate {
             KeyboardDynamicMode::Wave | KeyboardDynamicMode::Shifting
         );
 
-        if uses_color && args.color.is_none() {
-            bail!("{:?} mode requires --color RRGGBB", args.mode);
-        }
         if !uses_color && args.color.is_some() {
             bail!("{:?} mode does not use --color", args.mode);
-        }
-        if uses_direction && args.direction.is_none() {
-            bail!(
-                "{:?} mode requires --direction fromleft or fromright",
-                args.mode
-            );
         }
         if !uses_direction && args.direction.is_some() {
             bail!("{:?} mode does not use --direction", args.mode);

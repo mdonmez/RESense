@@ -20,6 +20,9 @@ const WIN_MENU_STATUS_SHIFT: u64 = 24;
 const COLOR_TAG_COUNT: usize = 127;
 const SYSTEM_PROFILE_ROOT: &str = r"C:\ProgramData\OEM\NitroSense\ProfilePool\LightProfilePool";
 const HW_SUPPORT_INI: &str = r"references\NitroSense\NitroSense\HW_Support.ini";
+const DEFAULT_DYNAMIC_SPEED: u8 = 5;
+const DEFAULT_DYNAMIC_COLOR: &str = "#FF0000";
+const DEFAULT_DYNAMIC_DIRECTION: Direction = Direction::FromLeft;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ZoneState {
@@ -46,6 +49,14 @@ pub struct KeyboardState {
     pub profile_xml: String,
 }
 
+#[derive(Debug, Clone)]
+struct ResolvedDynamicArgs {
+    mode: KeyboardDynamicMode,
+    speed: u8,
+    color: Option<String>,
+    direction: Option<Direction>,
+}
+
 pub fn set_brightness(level: u8) -> Result<()> {
     let current = read_state()?;
 
@@ -54,7 +65,7 @@ pub fn set_brightness(level: u8) -> Result<()> {
             .dynamic
             .as_ref()
             .context("dynamic keyboard state is missing persisted effect details")?;
-        let args = dynamic_args_from_state(dynamic)?;
+        let args = resolved_dynamic_args_from_state(dynamic)?;
         let payload = encode_dynamic_payload(&args, level)?;
         let (raw, return_code) =
             pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(payload)])?;
@@ -98,10 +109,11 @@ pub fn set_static(args: &KeyboardStaticArgs) -> Result<KeyboardState> {
 
 pub fn set_dynamic(args: &KeyboardDynamicArgs) -> Result<KeyboardState> {
     let current = read_state()?;
-    let payload = encode_dynamic_payload(args, current.brightness)?;
+    let resolved = resolve_dynamic_args(args, &current)?;
+    let payload = encode_dynamic_payload(&resolved, current.brightness)?;
     let (raw, return_code) = pipe::service_set(CMD_SET_KB_BACKLIGHT, &[pipe::u64_arg(payload)])?;
     ensure_success(CMD_SET_KB_BACKLIGHT, &raw, return_code)?;
-    sync_dynamic_to_system_xml(args, current.brightness)
+    sync_dynamic_to_system_xml(&resolved, current.brightness)
 }
 
 pub fn set_sticky_keys(enabled: bool) -> Result<()> {
@@ -167,7 +179,7 @@ pub fn encode_brightness(level: u8) -> u64 {
     (((level - 1) as u64) * 25) << 16
 }
 
-pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs, brightness: u8) -> Result<u64> {
+fn encode_dynamic_payload(args: &ResolvedDynamicArgs, brightness: u8) -> Result<u64> {
     let (selector, uses_color, uses_direction, wave_flag) = match args.mode {
         KeyboardDynamicMode::Breathing => (1, true, false, 0),
         KeyboardDynamicMode::Neon => (2, false, false, 0),
@@ -200,8 +212,8 @@ pub fn encode_dynamic_payload(args: &KeyboardDynamicArgs, brightness: u8) -> Res
     Ok(payload)
 }
 
-fn dynamic_args_from_state(state: &DynamicState) -> Result<KeyboardDynamicArgs> {
-    Ok(KeyboardDynamicArgs {
+fn resolved_dynamic_args_from_state(state: &DynamicState) -> Result<ResolvedDynamicArgs> {
+    Ok(ResolvedDynamicArgs {
         mode: parse_dynamic_mode(&state.mode)?,
         speed: state.speed,
         color: state.color.clone(),
@@ -244,6 +256,72 @@ fn build_static_zones(
             }
         })
         .collect()
+}
+
+fn resolve_dynamic_args(
+    args: &KeyboardDynamicArgs,
+    current: &KeyboardState,
+) -> Result<ResolvedDynamicArgs> {
+    let current_dynamic = current
+        .dynamic
+        .as_ref()
+        .map(resolved_dynamic_args_from_state)
+        .transpose()?;
+
+    let uses_color = !matches!(args.mode, KeyboardDynamicMode::Neon);
+    let uses_direction = matches!(
+        args.mode,
+        KeyboardDynamicMode::Wave | KeyboardDynamicMode::Shifting
+    );
+
+    Ok(ResolvedDynamicArgs {
+        mode: args.mode,
+        speed: args
+            .speed
+            .or_else(|| current_dynamic.as_ref().map(|dynamic| dynamic.speed))
+            .unwrap_or(DEFAULT_DYNAMIC_SPEED),
+        color: if uses_color {
+            Some(resolve_dynamic_color(args, current, current_dynamic.as_ref())?)
+        } else {
+            None
+        },
+        direction: if uses_direction {
+            Some(
+                args.direction
+                    .or_else(|| current_dynamic.as_ref().and_then(|dynamic| dynamic.direction))
+                    .unwrap_or(DEFAULT_DYNAMIC_DIRECTION),
+            )
+        } else {
+            None
+        },
+    })
+}
+
+fn resolve_dynamic_color(
+    args: &KeyboardDynamicArgs,
+    current: &KeyboardState,
+    current_dynamic: Option<&ResolvedDynamicArgs>,
+) -> Result<String> {
+    if let Some(color) = &args.color {
+        return normalize_color(color);
+    }
+
+    if let Some(dynamic) = current_dynamic
+        && let Some(color) = &dynamic.color
+    {
+        return normalize_color(color);
+    }
+
+    if let Some(color) = current
+        .static_zones
+        .iter()
+        .find(|zone| zone.status)
+        .map(|zone| zone.color.as_str())
+    {
+        return normalize_color(color);
+    }
+
+    normalize_color(DEFAULT_DYNAMIC_COLOR)
 }
 
 fn encode_zone_behavior(zones: &[ZoneState]) -> u64 {
@@ -423,7 +501,7 @@ fn sync_static_to_system_xml(zones: &[ZoneState], brightness: u8) -> Result<Keyb
     })
 }
 
-fn sync_dynamic_to_system_xml(args: &KeyboardDynamicArgs, brightness: u8) -> Result<KeyboardState> {
+fn sync_dynamic_to_system_xml(args: &ResolvedDynamicArgs, brightness: u8) -> Result<KeyboardState> {
     mutate_profile_xml(|root| {
         let pattern_index = pattern_index(args.mode);
         let key = child_mut(root, "Key")?;
@@ -710,7 +788,7 @@ mod tests {
 
     #[test]
     fn dynamic_payload_uses_existing_brightness() {
-        let args = KeyboardDynamicArgs {
+        let args = ResolvedDynamicArgs {
             mode: KeyboardDynamicMode::Wave,
             speed: 4,
             color: Some("00AEEF".to_string()),
@@ -732,7 +810,7 @@ mod tests {
             direction: Some("fromleft".to_string()),
         };
 
-        let args = dynamic_args_from_state(&state).unwrap();
+        let args = resolved_dynamic_args_from_state(&state).unwrap();
 
         assert_eq!(args.mode, KeyboardDynamicMode::Wave);
         assert_eq!(args.speed, 4);
@@ -750,9 +828,98 @@ mod tests {
             direction: Some("none".to_string()),
         };
 
-        let args = dynamic_args_from_state(&state).unwrap();
+        let args = resolved_dynamic_args_from_state(&state).unwrap();
 
         assert_eq!(args.mode, KeyboardDynamicMode::Neon);
         assert_eq!(args.direction, None);
+    }
+
+    #[test]
+    fn resolves_missing_dynamic_settings_from_current_dynamic_state() {
+        let current = KeyboardState {
+            mode: "dynamic".to_string(),
+            brightness: 4,
+            static_zones: vec![],
+            dynamic: Some(DynamicState {
+                mode: "wave".to_string(),
+                speed: 3,
+                brightness: 4,
+                color: Some("#00AEEF".to_string()),
+                direction: Some("fromright".to_string()),
+            }),
+            profile_xml: String::new(),
+        };
+
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Shifting,
+            speed: None,
+            color: None,
+            direction: None,
+        };
+
+        let resolved = resolve_dynamic_args(&args, &current).unwrap();
+
+        assert_eq!(resolved.speed, 3);
+        assert_eq!(resolved.color.as_deref(), Some("#00AEEF"));
+        assert_eq!(resolved.direction, Some(Direction::FromRight));
+    }
+
+    #[test]
+    fn resolves_missing_dynamic_color_from_static_zone() {
+        let current = KeyboardState {
+            mode: "static".to_string(),
+            brightness: 5,
+            static_zones: vec![
+                ZoneState {
+                    index: 1,
+                    status: false,
+                    color: "#111111".to_string(),
+                },
+                ZoneState {
+                    index: 2,
+                    status: true,
+                    color: "#22C55E".to_string(),
+                },
+            ],
+            dynamic: None,
+            profile_xml: String::new(),
+        };
+
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Breathing,
+            speed: None,
+            color: None,
+            direction: None,
+        };
+
+        let resolved = resolve_dynamic_args(&args, &current).unwrap();
+
+        assert_eq!(resolved.speed, DEFAULT_DYNAMIC_SPEED);
+        assert_eq!(resolved.color.as_deref(), Some("#22C55E"));
+        assert_eq!(resolved.direction, None);
+    }
+
+    #[test]
+    fn falls_back_to_default_dynamic_values_when_no_state_exists() {
+        let current = KeyboardState {
+            mode: "static".to_string(),
+            brightness: 5,
+            static_zones: vec![],
+            dynamic: None,
+            profile_xml: String::new(),
+        };
+
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Wave,
+            speed: None,
+            color: None,
+            direction: None,
+        };
+
+        let resolved = resolve_dynamic_args(&args, &current).unwrap();
+
+        assert_eq!(resolved.speed, DEFAULT_DYNAMIC_SPEED);
+        assert_eq!(resolved.color.as_deref(), Some(DEFAULT_DYNAMIC_COLOR));
+        assert_eq!(resolved.direction, Some(DEFAULT_DYNAMIC_DIRECTION));
     }
 }

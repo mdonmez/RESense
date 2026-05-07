@@ -40,6 +40,6 @@
 # Keyboard
 
 - [x] When all four keyboard backlight zones are enabled, executing `.\resense.exe keyboard static --zone1 FFFFFF` currently disables zones 2, 3, and 4. The command must be scoped strictly to the specified zone(s), leaving other zones and overall brightness unchanged.
-- [ ] When setting dynamic, if the speed, direction and color are not specified, the default values should be used. They should not be required, and the command should work with just the `dynamic mode` subcommand, with less friction.
+- [x] When setting dynamic, missing speed, direction, and color are inferred from the closest current lighting state when possible, and only fall back to defaults when nothing usable exists. `resense keyboard dynamic <mode>` now works without requiring those flags.
 - [x] The brightness control should only be at `keyboard brightness`, the sub-brightness flags from dynamic and static should be removed and they should not touch brightness value.
 - [x] The direction values under dynamic should be renamed from left and right to fromleft and fromright to be more understandable.

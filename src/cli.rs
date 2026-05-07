@@ -109,7 +109,7 @@ pub struct KeyboardDynamicArgs {
     #[arg(help = "Dynamic effect mode")]
     pub mode: KeyboardDynamicMode,
     #[arg(long, help = "Effect speed from 1 to 5")]
-    pub speed: u8,
+    pub speed: Option<u8>,
     #[arg(long, help = "Effect color as a 6-digit hex value")]
     pub color: Option<String>,
     #[arg(long, help = "Effect direction: fromleft or fromright")]

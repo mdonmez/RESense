@@ -9,7 +9,7 @@ resense
 ├── keyboard
 │   ├── brightness {1-5}
 │   ├── static --zone1..4 HEXCOLORS
-│   ├── dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--color] [--direction {fromleft,fromright}]
+│   ├── dynamic {breathing,neon,shifting,wave,zoom} [--speed {1-5}] [--color] [--direction {fromleft,fromright}]
 │   ├── sticky {enable,disable}
 │   └── win-menu {enable,disable}
 ├── mode {quiet,default,performance} [--skip-whispermode]
@@ -79,14 +79,14 @@ Set 4-zone static lighting. Each zone accepts a 6-digit hex color (e.g., `FF0000
 
 Updates static keyboard lighting according to the selected zone colors. This command preserves the current keyboard brightness.
 
-### `resense keyboard dynamic {breathing,neon,shifting,wave,zoom} --speed {1-5} [--color HEXCOLOR] [--direction {fromleft,fromright}]`
+### `resense keyboard dynamic {breathing,neon,shifting,wave,zoom} [--speed {1-5}] [--color HEXCOLOR] [--direction {fromleft,fromright}]`
 
 Set dynamic keyboard lighting effect.
 
 - `mode` - Dynamic effect: `breathing`, `neon`, `shifting`, `wave`, `zoom`
-- `--speed {1-5}` - Effect speed (required, 1=slowest, 5=fastest)
+- `--speed {1-5}` - Effect speed (optional, 1=slowest, 5=fastest)
 
-Updates dynamic keyboard lighting according to the selected effect, speed, color, and direction while preserving the current keyboard brightness. `--color` is required for only `breathing`, `wave`, `shifting`, and `zoom`, but not used by `neon`. `--direction` is required for `wave` and `shifting`, but ignored by other modes. Providing wrong flags for a mode will raise an error.
+Updates dynamic keyboard lighting according to the selected effect while preserving the current keyboard brightness. Missing dynamic settings are resolved intelligently from the current lighting state: RESense reuses the current dynamic speed, direction, and color when possible, otherwise borrows a usable color from the current static zones, and only falls back to built-in defaults when no better state exists. `--color` is ignored by `neon`, and `--direction` is only used by `wave` and `shifting`. Providing unsupported flags for a mode still raises an error.
 
 ### `resense keyboard sticky {enable,disable}`
 
