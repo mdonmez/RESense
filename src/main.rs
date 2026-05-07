@@ -26,11 +26,13 @@ fn run(cli: Cli) -> Result<()> {
         }
         Commands::Fan(command) => match command.command {
             FanCommands::Mode(args) => {
+                nitrosense::policy::ensure_fan_control_allowed()?;
                 nitrosense::fan::set_mode(args.mode)?;
                 println!("fan_mode={}", args.mode);
             }
             FanCommands::Speed(args) => {
                 validate::fan_speed_args(&args)?;
+                nitrosense::policy::ensure_fan_control_allowed()?;
                 let result = nitrosense::fan::set_speed(&args)?;
                 println!("{}", serde_json::to_string_pretty(&result)?);
             }
@@ -61,7 +63,9 @@ fn run(cli: Cli) -> Result<()> {
             }
         },
         Commands::Mode(args) => {
+            nitrosense::policy::enforce_operation_mode_fan_policy(args.mode)?;
             nitrosense::mode::set_operation_mode(args.mode, args.skip_whispermode)?;
+            nitrosense::policy::enforce_operation_mode_fan_policy(args.mode)?;
             println!("operation_mode={}", args.mode);
         }
         Commands::Display(command) => match command.command {

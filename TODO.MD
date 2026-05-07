@@ -8,7 +8,7 @@
 - [ ] Update README and add docs/ for more details. Also add docs/reverse-engineering/ for more details on the reverse engineering process.
 - [ ] The application attempts to connect to the PredatorSense pipe. If the background service is stopped, disabled, or not installed, it results in meaningless pipe errors. Before attempting the pipe connection, the application should verify whether the service is running and provide a clear warning to the user about starting the PredatorSense service.
 - [ ] Improve code quality, readability and consistency.
-- [ ] The original NitroSense app disables controlling the mode when running on AC, and disables fan control when on quiet mode. (I don't really remember this behavior - it will be reverse-engineered and verified how it works and will implement to resense correctly to behave like the original NitroSense app)
+- [x] Quiet mode now forces fan auto and blocks further fan control to keep the mode semantically quiet. RESense intentionally does not copy NitroSense's AC/Battery-Boost lock on operation mode control.
 - [x] When brightness is changed with resense brightness command, the dynamic is overwritten and goes back to white static.
 - [ ] More information about reverse engineering and named pipes will be gathered and documented.
 

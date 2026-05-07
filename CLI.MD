@@ -42,7 +42,7 @@ Set global fan mode.
 - `auto` - Automatic fan control
 - `max` - Maximum fan speed
 
-Updates fan control according to the selected mode.
+Updates fan control according to the selected mode. If operation mode is currently `quiet`, RESense blocks manual fan changes and keeps fan mode locked to auto.
 
 ### `resense fan speed [--cpu N] [--gpu N] [--cpu-auto] [--gpu-auto]`
 
@@ -54,6 +54,7 @@ Set custom fan percentages or per-fan auto. At least one of `--cpu`, `--gpu`, `-
 - `--gpu-auto` - Set GPU fan to automatic mode
 
 Updates fan control according to the selected custom speed or auto setting.
+If operation mode is currently `quiet`, RESense blocks this command and keeps fan mode locked to auto.
 
 ---
 
@@ -116,6 +117,7 @@ Set operation mode.
 - `performance` - Highest performance mode
 
 Updates the operation mode according to the selected setting.
+Setting `quiet` immediately forces fan mode to `auto`, re-applies that auto state after the mode change, and keeps fan control blocked while quiet mode remains active. Unlike the original NitroSense UI, RESense does not restrict operation mode changes based on AC or battery state.
 
 ---
 
