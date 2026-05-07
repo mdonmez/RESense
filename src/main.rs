@@ -15,6 +15,8 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<()> {
+    platform::model::ensure_supported_model(cli.dangerously_allow_any_model)?;
+
     match cli.command {
         Commands::Status(args) => {
             let status = nitrosense::status::read_status();

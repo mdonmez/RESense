@@ -1,6 +1,6 @@
 # General
 
-- [ ] The app should check if the platform is AN-515-58 model and if not, it should deny running. (Or run with `--dangerously-allow-any-model`)
+- [x] The app now checks that the machine matches the AN515-58 family before running, and only bypasses that guard when `--dangerously-allow-any-model` is explicitly provided.
 - [ ] The entire CLI outputs should be rewritten to use the same style and to be more user-friendly and readable.
 - [ ] The final re-lookup should be performed to ensure the app is written correctly as expected and wanted.
 - [ ] Magic numbers should be replaced with named constants or configuration values.

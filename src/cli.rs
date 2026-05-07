@@ -6,6 +6,13 @@ use std::fmt;
 #[command(name = "resense")]
 #[command(about = "RESense command-line interface")]
 pub struct Cli {
+    #[arg(
+        long = "dangerously-allow-any-model",
+        global = true,
+        help = "Bypass the AN515-58 model check and run on any machine"
+    )]
+    pub dangerously_allow_any_model: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

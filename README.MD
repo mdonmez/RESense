@@ -13,3 +13,7 @@ This is a critical problem because it blocks access to the device’s most basic
 Also, expecting Microsoft to fix this after breaking it on an operating system that is already this problematic is not exactly realistic either.
 
 The purpose of this tool is to provide a working, programmable NitroSense GUI replacement after dealing with all of this mess.
+
+## Safety
+
+RESense is intended for the Acer Nitro 5 AN515-58 family. By default it checks the detected system model before running and refuses to start on other machines. Use `--dangerously-allow-any-model` only if you explicitly want to bypass that safeguard.
