@@ -21,10 +21,10 @@
 # Reverse Engineering
 
 - [ ] Use restored NitroSense access as a live oracle: change one NitroSense UI setting at a time, then compare pipe traffic, HKLM state, ProgramData XML, hardware behavior, and `resense status`.
-- [ ] Re-verify ambiguous fan readback boundaries, especially true Auto versus mixed custom states that currently collapse into `auto_like`.
-- [ ] Re-test keyboard zone live readback. With NitroSense open on 2026-05-16, UI/XML showed all zones on while service command `12` returned `1` for all zones and RESense decoded that as `false`.
-- [ ] Confirm whether NitroSense dynamic lighting speed is actually `1..9`; UI Automation reported `Speed_ScrollBar` range `1..9`, while RESense currently exposes `1..5`.
-- [ ] Re-check keyboard brightness, static/dynamic mode, and RGB color readback while NitroSense is open to confirm whether any UI-only state path was missed.
+- [x] Re-verify ambiguous fan readback boundaries. `mode_byte=1` now confirms a narrower `auto_like` bucket: true global Auto, custom-all-auto, and GPU-only manual custom states. `mode_byte=3` reliably identifies CPU-manual custom states.
+- [x] Re-test keyboard zone live readback. With NitroSense open on 2026-05-16, UI/XML showed all zones on while service command `12` returned `1` for all zones; RESense had the decode inverted and now treats low byte `1` as enabled.
+- [x] Confirm whether NitroSense dynamic lighting speed is actually `1..9`; UI Automation exposed `Speed_ScrollBar` range `1..9`, and RESense now accepts and documents `1..9` instead of the old `1..5` cap.
+- [x] Re-check keyboard brightness, static/dynamic mode, and RGB color readback while NitroSense is open. Static and dynamic observations both tracked slider brightness through `LightingEffects.brightness`; `Key.brightness` was stale in both modes and should not be treated as the live slider source by itself.
 - [x] Treat NitroSense GUI refresh as manual: close and reopen NitroSense after RESense CLI writes when the live interface needs to show the latest persisted values.
 - [ ] Document any NitroSense UI-only policy behavior separately from RESense behavior before copying it. RESense should only copy policy restrictions when they are required for hardware safety or correctness.
 - [ ] Keep `reverse-engineering/README.MD` updated with tested commands, observed payloads, state paths, and unresolved assumptions.

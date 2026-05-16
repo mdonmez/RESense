@@ -1,6 +1,6 @@
 # RESense
 
-_Reverse-engineered CLI companion and replacement for the NitroSense GUI on the AN515-58._
+_Reverse-engineered hardware control CLI for Acer Nitro AN515-58 systems._
 
 ---
 

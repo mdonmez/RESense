@@ -183,7 +183,7 @@ Recent colors:
 - `recent_color2`: `#352036`
 - `recent_color3`: `#3C2949`
 
-## New Finding: Zone Getter Needs Re-Verification
+## New Finding: Zone Getter Decode Was Inverted
 
 NitroSense UI and XML both reported all four lighting zones enabled, but RESense status reported every `live_zone_status` as disabled.
 
@@ -196,7 +196,7 @@ Direct command `12` reads returned:
 | 3 | `4` | `01080000000100000000000000` | `1` | `1` | `false` |
 | 4 | `8` | `01080000000100000000000000` | `1` | `1` | `false` |
 
-Current RESense code treats `(value & 0xFF) == 0` as enabled. With the restored NitroSense GUI open, the evidence points to either an inverted decode or a more nuanced meaning for command `12`. This should be re-tested by toggling one zone in NitroSense and comparing the command `12` value before changing RESense behavior.
+Current RESense code treated `(value & 0xFF) == 0` as enabled. This capture, combined with the matching ProgramData XML and NitroSense UI state, validated the inverse mapping instead: command `12` low byte `1` means enabled. RESense was updated accordingly. A one-zone toggle re-test is still useful as additional confirmation, but the all-zones-on case is now explained by the decode bug rather than by an unknown command semantic.
 
 ## NitroSense GUI Refresh Behavior
 
@@ -214,7 +214,6 @@ RESense intentionally does not drive the running NitroSense UI. Early live-refre
 
 ## Follow-Up Targets
 
-- Re-test service command `12` by toggling one NitroSense zone at a time.
-- Confirm whether dynamic speed really has a UI range of `1..9`; RESense currently documents and exposes `1..5`.
+- Dynamic speed UI range appears to be `1..9`; RESense should keep the CLI and validation aligned with that instead of the old `1..5` cap.
 - Capture Sound Mode and Settings popups separately if UI navigation is acceptable.
 - Use a pipe monitor or targeted before/after snapshots while changing one NitroSense control at a time.

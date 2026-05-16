@@ -91,7 +91,7 @@ pub fn read_status() -> AppStatus {
                 live_zones,
                 "service cmd 12",
                 Reliability::Live,
-                Some("Zone enabled/disabled readback is the only trusted keyboard live getter.".to_string()),
+                Some("Service cmd 12 low byte maps 1=enabled and 0=disabled for per-zone live status.".to_string()),
             ),
             sticky_keys_live: match sticky {
                 Ok(value) => Status {

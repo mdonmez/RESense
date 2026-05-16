@@ -45,7 +45,7 @@ pub mod validate {
 
     pub fn dynamic_args(args: &KeyboardDynamicArgs) -> Result<()> {
         if let Some(speed) = args.speed {
-            range("speed", speed, 1, 5)?;
+            range("speed", speed, 1, 9)?;
         }
 
         let uses_color = !matches!(args.mode, KeyboardDynamicMode::Neon);
@@ -62,5 +62,35 @@ pub mod validate {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate;
+    use crate::cli::{KeyboardDynamicArgs, KeyboardDynamicMode};
+
+    #[test]
+    fn dynamic_speed_accepts_nine() {
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Wave,
+            speed: Some(9),
+            color: None,
+            direction: None,
+        };
+
+        assert!(validate::dynamic_args(&args).is_ok());
+    }
+
+    #[test]
+    fn dynamic_speed_rejects_ten() {
+        let args = KeyboardDynamicArgs {
+            mode: KeyboardDynamicMode::Wave,
+            speed: Some(10),
+            color: None,
+            direction: None,
+        };
+
+        assert!(validate::dynamic_args(&args).is_err());
     }
 }

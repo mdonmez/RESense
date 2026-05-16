@@ -196,7 +196,7 @@ fn read_live_mode_probe() -> Result<LiveModeProbe> {
         1 => (
             "auto_like",
             false,
-            "Auto-like is ambiguous between true Auto and some mixed custom states.",
+            "Auto-like currently covers true global Auto, custom-all-auto, and GPU-only manual custom states.",
         ),
         _ => ("unknown", false, "Live mode probe is not fully decoded."),
     };
@@ -364,5 +364,61 @@ mod tests {
             ),
         ]);
         assert_eq!(encode_exact_custom_behavior(&state), 0x430009);
+    }
+
+    #[test]
+    fn describes_exact_mode_variants() {
+        let custom_all_auto = BTreeMap::from([
+            (
+                FanGroup::Cpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
+            (
+                FanGroup::Gpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
+        ]);
+        let custom_cpu_manual = BTreeMap::from([
+            (
+                FanGroup::Cpu,
+                FanCustomState {
+                    percent: 70,
+                    auto: false,
+                },
+            ),
+            (
+                FanGroup::Gpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
+        ]);
+        let custom_gpu_manual = BTreeMap::from([
+            (
+                FanGroup::Cpu,
+                FanCustomState {
+                    percent: 70,
+                    auto: true,
+                },
+            ),
+            (
+                FanGroup::Gpu,
+                FanCustomState {
+                    percent: 70,
+                    auto: false,
+                },
+            ),
+        ]);
+
+        assert_eq!(describe_exact_mode("custom", &custom_all_auto), "custom_all_auto");
+        assert_eq!(describe_exact_mode("custom", &custom_cpu_manual), "custom_cpu_manual");
+        assert_eq!(describe_exact_mode("custom", &custom_gpu_manual), "custom_gpu_manual");
     }
 }

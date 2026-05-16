@@ -156,7 +156,7 @@ pub fn read_zone_statuses() -> Result<Vec<ZoneState>> {
         let (_, value) = pipe::service_get_u64(CMD_GET_LED_GROUP_COLOR, &[pipe::u32_arg(zone_id)])?;
         result.push(ZoneState {
             index,
-            status: (value & 0xFF) == 0,
+            status: decode_live_zone_status(value),
             color: "live-status-only".to_string(),
         });
     }
@@ -421,6 +421,10 @@ fn system_profile_xml_path() -> Result<PathBuf> {
 
 fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
     let root = read_xml(path)?;
+    parse_profile_state_from_root(&root, path)
+}
+
+fn parse_profile_state_from_root(root: &Element, path: &Path) -> Result<KeyboardState> {
     let key = child(&root, "Key")?;
     let lighting = child(&root, "LightingEffects")?;
     let pattern = child(&root, "Pattern")?;
@@ -445,7 +449,7 @@ fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
         Some(DynamicState {
             mode: pattern_name(selected).to_string(),
             speed: attr_u8(selected_pattern, "speed")?,
-            brightness: attr_u8(key, "brightness")?,
+            brightness,
             color: Some(normalize_color(attr(pattern, "color")?)?),
             direction: Some(direction_name(attr_u8(selected_pattern, "direction")?).to_string()),
         })
@@ -672,6 +676,10 @@ fn zone_id(index: u8) -> u64 {
     }
 }
 
+fn decode_live_zone_status(value: u64) -> bool {
+    (value & 0xFF) != 0
+}
+
 fn ensure_success(cmd: u16, raw: &[u8], return_code: u32) -> Result<()> {
     if return_code != 0 {
         bail!(
@@ -843,6 +851,32 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_brightness_uses_lighting_effects_value_not_stale_key_value() {
+        let xml = r##"
+<ROOT name="Default">
+  <Key status="1" brightness="5">
+    <Tag0 color="#00FF00" />
+  </Key>
+  <Pattern selected="1" color="#00FF00">
+    <Pattern1 direction="1" speed="9" />
+  </Pattern>
+  <LightingEffects brightness="1">
+    <LightingEffects_Zone1 status="1" color="#FF0000" />
+    <LightingEffects_Zone2 status="1" color="#FFA000" />
+    <LightingEffects_Zone3 status="1" color="#00FF00" />
+    <LightingEffects_Zone4 status="1" color="#001EFF" />
+  </LightingEffects>
+</ROOT>
+"##;
+        let root = Element::parse(xml.as_bytes()).unwrap();
+        let state = parse_profile_state_from_root(&root, Path::new("C:\\dummy\\Main.xml")).unwrap();
+
+        assert_eq!(state.mode, "dynamic");
+        assert_eq!(state.brightness, 1);
+        assert_eq!(state.dynamic.as_ref().unwrap().brightness, 1);
+    }
+
+    #[test]
     fn resolves_missing_dynamic_settings_from_current_dynamic_state() {
         let current = KeyboardState {
             mode: "dynamic".to_string(),
@@ -929,5 +963,11 @@ mod tests {
         assert_eq!(resolved.speed, DEFAULT_DYNAMIC_SPEED);
         assert_eq!(resolved.color.as_deref(), Some(DEFAULT_DYNAMIC_COLOR));
         assert_eq!(resolved.direction, Some(DEFAULT_DYNAMIC_DIRECTION));
+    }
+
+    #[test]
+    fn live_zone_status_byte_one_means_enabled() {
+        assert!(decode_live_zone_status(1));
+        assert!(!decode_live_zone_status(0));
     }
 }
