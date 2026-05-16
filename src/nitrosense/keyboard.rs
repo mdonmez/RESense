@@ -281,14 +281,22 @@ fn resolve_dynamic_args(
             .or_else(|| current_dynamic.as_ref().map(|dynamic| dynamic.speed))
             .unwrap_or(DEFAULT_DYNAMIC_SPEED),
         color: if uses_color {
-            Some(resolve_dynamic_color(args, current, current_dynamic.as_ref())?)
+            Some(resolve_dynamic_color(
+                args,
+                current,
+                current_dynamic.as_ref(),
+            )?)
         } else {
             None
         },
         direction: if uses_direction {
             Some(
                 args.direction
-                    .or_else(|| current_dynamic.as_ref().and_then(|dynamic| dynamic.direction))
+                    .or_else(|| {
+                        current_dynamic
+                            .as_ref()
+                            .and_then(|dynamic| dynamic.direction)
+                    })
                     .unwrap_or(DEFAULT_DYNAMIC_DIRECTION),
             )
         } else {

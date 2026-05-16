@@ -28,7 +28,8 @@ mod platform {
         let service = ServiceHandle::open_service(manager.0, PREDATOR_SERVICE_NAME)?;
         let status = service.query_status()?;
 
-        if status.dwCurrentState == SERVICE_RUNNING || status.dwCurrentState == SERVICE_START_PENDING
+        if status.dwCurrentState == SERVICE_RUNNING
+            || status.dwCurrentState == SERVICE_START_PENDING
         {
             return Ok(());
         }
@@ -71,8 +72,7 @@ mod platform {
 
     impl ServiceHandle {
         fn open_manager() -> Result<Self> {
-            let handle =
-                unsafe { OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT) };
+            let handle = unsafe { OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT) };
             if handle.is_null() {
                 bail!(
                     "OpenSCManagerW failed while checking Predator service: Windows error {}",

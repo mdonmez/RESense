@@ -36,7 +36,11 @@ fn read_model_probe() -> ModelProbe {
     ModelProbe {
         system_product_name: registry::read_hklm_string(BIOS_PATH, SYSTEM_PRODUCT_NAME).ok(),
         baseboard_product: registry::read_hklm_string(BIOS_PATH, BASEBOARD_PRODUCT).ok(),
-        nitrosense_model_name_1st: registry::read_hklm_string(registry::NITROSENSE, "Model_Name_1st").ok(),
+        nitrosense_model_name_1st: registry::read_hklm_string(
+            registry::NITROSENSE,
+            "Model_Name_1st",
+        )
+        .ok(),
     }
 }
 

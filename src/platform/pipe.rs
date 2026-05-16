@@ -239,8 +239,12 @@ mod tests {
     #[test]
     fn detects_predator_transport_names() {
         assert!(uses_predator_transport(SERVICE_PIPE_NAME));
-        assert!(uses_predator_transport(r"\\.\pipe\PredatorSense_admin_agent_1"));
-        assert!(uses_predator_transport(r"\\.\pipe\predatorsense_service_namedpipe"));
+        assert!(uses_predator_transport(
+            r"\\.\pipe\PredatorSense_admin_agent_1"
+        ));
+        assert!(uses_predator_transport(
+            r"\\.\pipe\predatorsense_service_namedpipe"
+        ));
         assert!(!uses_predator_transport(r"\\.\pipe\something_else"));
     }
 }

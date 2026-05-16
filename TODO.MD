@@ -5,13 +5,29 @@
 - [ ] The final re-lookup should be performed to ensure the app is written correctly as expected and wanted.
 - [ ] Magic numbers should be replaced with named constants or configuration values.
 - [ ] The error messages should be improved and more user-friendly.
-- [ ] Update README and add docs/ for more details. Also add docs/reverse-engineering/ for more details on the reverse engineering process.
+- [ ] Add broader docs/ for usage, safety, and implementation details.
+- [x] Update README to reflect that NitroSense access returned on 2026-05-15 after KB5089549 while RESense development continues.
 - [x] Before attempting PredatorSense pipe access, RESense now checks whether `PSSvc` (`Predator Service`) is installed and running, and returns a clear start/repair warning instead of raw pipe errors when it is unavailable.
 - [ ] Improve code quality, readability and consistency.
 - [x] Quiet mode now forces fan auto and blocks further fan control to keep the mode semantically quiet. RESense intentionally does not copy NitroSense's AC/Battery-Boost lock on operation mode control.
 - [x] When brightness is changed with resense brightness command, the dynamic is overwritten and goes back to white static.
-- [ ] More information about reverse engineering and named pipes will be gathered and documented.
+- [x] Add initial reverse-engineering notes for the restored NitroSense real-time comparison workflow.
+- [x] Add a first non-invasive NitroSense GUI capture with process/package details, active pipes, UI Automation IDs, registry/XML snapshots, and `resense status` comparison.
+- [x] Document that NitroSense GUI live-refresh attempts were reverted; RESense writes persisted state and NitroSense should be reopened when its GUI needs to show CLI changes.
+- [x] Verify PredatorSense transport detection covers the lowercase service pipe name observed while NitroSense was running.
+- [ ] More information about reverse engineering and named pipes will be gathered and documented as NitroSense can now be observed live again.
 - [ ] Entire CLI skeleton should be rethought to be more user-friendly, understandable, simple and intuitive.
+
+# Reverse Engineering
+
+- [ ] Use restored NitroSense access as a live oracle: change one NitroSense UI setting at a time, then compare pipe traffic, HKLM state, ProgramData XML, hardware behavior, and `resense status`.
+- [ ] Re-verify ambiguous fan readback boundaries, especially true Auto versus mixed custom states that currently collapse into `auto_like`.
+- [ ] Re-test keyboard zone live readback. With NitroSense open on 2026-05-16, UI/XML showed all zones on while service command `12` returned `1` for all zones and RESense decoded that as `false`.
+- [ ] Confirm whether NitroSense dynamic lighting speed is actually `1..9`; UI Automation reported `Speed_ScrollBar` range `1..9`, while RESense currently exposes `1..5`.
+- [ ] Re-check keyboard brightness, static/dynamic mode, and RGB color readback while NitroSense is open to confirm whether any UI-only state path was missed.
+- [x] Treat NitroSense GUI refresh as manual: close and reopen NitroSense after RESense CLI writes when the live interface needs to show the latest persisted values.
+- [ ] Document any NitroSense UI-only policy behavior separately from RESense behavior before copying it. RESense should only copy policy restrictions when they are required for hardware safety or correctness.
+- [ ] Keep `reverse-engineering/README.MD` updated with tested commands, observed payloads, state paths, and unresolved assumptions.
 
 # New Feature Ideas
 
@@ -36,6 +52,7 @@
 
 # Status
 
+- [x] As of 2026-05-15, NitroSense is accessible again after KB5089549. RESense remains active as a programmable CLI and as a reverse-engineering target that can now be compared against the live NitroSense GUI.
 - [ ] A --live flag should be added to the status command that shows the current state of the fan and CPU/GPU temperature in real-time.
 
 # Keyboard
