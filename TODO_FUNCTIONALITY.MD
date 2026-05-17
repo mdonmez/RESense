@@ -91,18 +91,105 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - NitroSense and RESense stay aligned on the timeout toggle
   - the live getter reports timeout `0` or `30` correctly
   - keyboard brightness remains owned by the `keyboard brightness` subsystem
-- [ ] Find and validate true live readback for keyboard brightness, if available.
-- [ ] Find and validate true live readback for keyboard static/dynamic mode, if available.
-- [ ] Find and validate true live readback for keyboard RGB colors, if available.
-- [ ] Verify whether NitroSense XML is authoritative state, persisted mirror state, or only NitroSense UI state for each keyboard attribute.
-- [ ] Verify whether `Key.status`, `Key.brightness`, `LightingEffects.brightness`, `Pattern.selected`, `Pattern.color`, and per-zone XML values each reflect live state, persisted state, or stale state.
-- [ ] Confirm that zone enable/disable live readback is fully decoded for all four zones and mixed on/off combinations.
-- [ ] Confirm that static writes change only the requested zones and do not unintentionally alter unrelated zones, brightness, or dynamic metadata.
-- [ ] Confirm that dynamic writes map exactly to service behavior for every mode, speed, direction, and color combination.
-- [ ] Remove inferred dynamic defaults as a hidden behavior unless they are intentionally part of the product contract and clearly documented.
-- [ ] Verify whether command 27, 28, and 29 responsibilities are completely understood and whether any missing service command is still needed for full fidelity.
-- [ ] Verify how NitroSense represents keyboard state when zones are off but last colors are preserved.
-- [ ] Define exactly what "current keyboard state" means when live service state and XML state disagree.
+- [x] Decide whether a true live readback for keyboard brightness exists in the currently known service surface.
+  Current conclusion:
+  - no trustworthy independent live brightness getter was found in the currently known service/query surface on this machine
+  - controlled raw sweeps across command families `10`, `12`, `20`, and `34` did not change when the physical keyboard moved from full brightness to NitroSense's darkest visible state
+  - the supported keyboard brightness read model therefore remains the validated NitroSense XML state
+- [x] Validate the current supported keyboard mode/brightness/color state model even if no independent live getter exists.
+  Current conclusion:
+  - NitroSense XML is currently the strongest supported keyboard state source on this machine
+  - validated against NitroSense and the physical keyboard for:
+    - static vs dynamic mode
+    - brightness
+    - dynamic effect
+    - dynamic direction
+    - dynamic speed
+    - dynamic color for effects that visibly use color
+    - remembered static zones while dynamic mode is active
+- [x] Decide whether a true live readback for keyboard static/dynamic mode exists in the currently known service surface.
+  Current conclusion:
+  - no trustworthy independent live static/dynamic mode getter was found in the currently known service/query surface on this machine
+  - the supported current-mode read model remains the validated NitroSense XML state
+- [x] Decide whether a true live readback for keyboard RGB colors exists in the currently known service surface.
+  Current conclusion:
+  - no trustworthy independent live RGB color getter was found in the currently known service/query surface on this machine
+  - NitroSense XML remains the supported source for current keyboard colors
+- [x] Define NitroSense XML's current role in the supported keyboard model.
+  Current conclusion:
+  - managed NitroSense keyboard UI restores static/dynamic mode, brightness, zone status, zone colors, dynamic effect, dynamic speed, dynamic direction, and pattern color from `LightingProfileXML`
+  - the same managed UI then pushes commands `27`, `28`, and `29` from that XML-backed state
+  - there are no managed GUI call sites for `cmd 12`
+  - controlled raw sweeps across the currently known getter families (`10`, `12`, `20`, `34`) did not reveal a separate trustworthy live keyboard-state getter
+  - for the currently supported keyboard surface on this machine, NitroSense XML is the strongest state source and behaves as NitroSense's own effective state model
+- [x] Verify whether `Key.status`, `Key.brightness`, `LightingEffects.brightness`, `Pattern.selected`, `Pattern.color`, and per-zone XML values each reflect live state, persisted state, or stale state.
+  Current conclusion:
+  - `LightingEffects.brightness` tracked the effective NitroSense slider / visible keyboard brightness in the validated static and dynamic cases
+  - `Key.brightness` can remain stale and is not the effective slider truth by itself
+  - `Key.status` and `Pattern.selected` tracked static vs dynamic mode in the validated cases
+  - `Pattern.color`, per-pattern speed/direction, and per-zone XML values tracked the validated NitroSense-visible current state
+  - these XML values should currently be treated as NitroSense's effective persisted state model, not as an independently proven live getter
+- [x] Decide whether any true live zone enable/disable readback exists in the currently known service surface for all four zones and mixed on/off combinations.
+  Current conclusion:
+  - `service cmd 12` is not a trustworthy live per-zone on/off source on this machine
+  - NitroSense and the physical keyboard showed a mixed `1/0/1/0` static pattern while all four `cmd 12` replies remained identical
+  - wider sweeps of the currently known getter families did not reveal another trustworthy live zone-state getter
+- [x] Confirm that static writes change only the requested zones and do not unintentionally alter unrelated zones, brightness, or supported remembered state in the validated cases.
+  Current conclusion:
+  - validated partial static writes changed only the requested zones
+  - unrelated zone colors/statuses and brightness stayed untouched in the validated cases
+  - remembered dynamic metadata remains outside the currently supported keyboard read contract and is not surfaced as independent live truth
+- [x] Confirm that partial static writes leave unrelated zones and brightness untouched in the validated cases.
+  Verified on 2026-05-17:
+  - `resense keyboard static --zone1 0000FF`
+  - only zone 1 changed
+  - zones 2, 3, and 4 remained unchanged
+  - brightness remained unchanged
+- [x] Verify that static writes can leave dynamic mode cleanly and produce the intended NitroSense-visible zone pattern.
+  Verified on 2026-05-17:
+  - `resense keyboard static --zone1 FF0000 --zone2 off --zone3 00FF00 --zone4 off`
+  - NitroSense switched from dynamic back to static
+  - the physical keyboard matched the exact `red/off/green/off` pattern
+  - XML readback matched the same final state
+- [x] Confirm that dynamic writes map exactly to the supported service/XML/hardware behavior for the validated dynamic modes and parameters.
+  Current conclusion:
+  - validated dynamic writes covered real effect transitions plus direction, speed, and color changes
+  - NitroSense UI, XML state, and the physical keyboard remained aligned in the validated cases
+  - the supported contract is the validated dynamic surface already exercised, not an exhaustive proof of every unreachable or visually indistinguishable combination
+- [x] Verify that dynamic writes and XML sync match NitroSense-visible state for at least one real effect transition and one parameter change.
+  Verified on 2026-05-17:
+  - `resense keyboard dynamic wave --direction from-left` flipped NitroSense and hardware from right-to-left back to left-to-right
+  - `resense keyboard dynamic breathing` switched NitroSense and hardware from wave to breathing
+  - XML stayed aligned for mode, brightness, speed, color, and direction
+- [x] Verify that keyboard brightness writes match NitroSense and the physical keyboard.
+  Verified on 2026-05-17:
+  - `resense keyboard brightness 5`
+  - NitroSense slider moved to full brightness
+  - the physical keyboard returned to full brightness
+- [x] Verify that at least one dynamic effect uses RESense-written color and speed on real hardware.
+  Verified on 2026-05-17:
+  - `resense keyboard dynamic breathing --speed 9 --color 00FFFF`
+  - NitroSense switched to `Nefes alma`
+  - the physical keyboard changed clearly to cyan
+  - the breathing speed became visibly fast
+- [x] Remove inferred dynamic defaults as a hidden behavior unless they are intentionally part of the product contract and clearly documented.
+  Current conclusion:
+  - missing dynamic speed/color/direction values are intentionally resolved from the current validated XML-backed keyboard state, then from explicit defaults only when no prior supported state exists
+  - this behavior is now part of the documented supported keyboard contract
+- [x] Verify whether command `27`, `28`, and `29` responsibilities are completely understood for the supported keyboard surface.
+  Current conclusion:
+  - `27` controls keyboard backlight mode/brightness/dynamic effect payloads
+  - `28` sets per-zone RGB for enabled static zones
+  - `29` sets per-zone enabled/disabled behavior
+  - no additional managed NitroSense keyboard service command was found for the currently supported surface
+- [x] Verify how NitroSense represents keyboard state when zones are off but last colors are preserved.
+  Current conclusion:
+  - when a zone is turned off, NitroSense XML preserves the last zone color while setting `status=0`
+  - RESense mirrors that behavior so the remembered color survives re-enabling
+- [x] Define exactly what "current keyboard state" means for the supported surface on this machine.
+  Current conclusion:
+  - the supported current keyboard state is NitroSense's effective XML-backed state model, validated against NitroSense UI and physical keyboard behavior
+  - RESense does not claim a separate independent live keyboard-state getter on this machine because none has been validated in the currently known service/query surface
 
 # Display
 

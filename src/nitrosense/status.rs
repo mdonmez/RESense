@@ -37,9 +37,8 @@ pub struct FanStatus {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct KeyboardStatus {
-    pub persisted_state: Status<Option<keyboard::KeyboardState>>,
+    pub state: Status<Option<keyboard::KeyboardState>>,
     pub backlight_timeout_live: Status<Option<bool>>,
-    pub live_zone_status: Status<Option<Vec<keyboard::ZoneState>>>,
     pub sticky_keys_live: Status<Option<bool>>,
     pub win_menu_key_lock_live: Status<Option<bool>>,
 }
@@ -63,7 +62,6 @@ pub struct SoundStatus {
 pub fn read_status() -> AppStatus {
     let fan_state = fan::read_state();
     let keyboard_state = keyboard::read_state();
-    let live_zones = keyboard::read_zone_statuses();
     let sticky = keyboard::read_sticky_keys();
     let win_menu = keyboard::read_win_menu_lock();
     let mode_state = mode::read_state();
@@ -82,23 +80,17 @@ pub fn read_status() -> AppStatus {
             ),
         },
         keyboard: KeyboardStatus {
-            persisted_state: status_from_result(
+            state: status_from_result(
                 keyboard_state,
-                "NitroSense system XML",
-                Reliability::Persisted,
-                Some("Brightness, RGB colors, and static/dynamic mode use NitroSense ProgramData XML.".to_string()),
+                "NitroSense system XML, validated against NitroSense UI and keyboard hardware for the supported keyboard surface",
+                Reliability::Validated,
+                Some("The supported keyboard state model is XML-backed on this machine: static vs dynamic mode, brightness, static zones, and dynamic effect metadata all tracked NitroSense and the physical keyboard in the validated cases, and no independent live keyboard getter has been found in the currently known service surface.".to_string()),
             ),
             backlight_timeout_live: status_from_result(
                 display::read_backlight_timeout(),
                 "service cmd 20/backlight timeout getter",
                 Reliability::Validated,
                 Some("Validated against the NitroSense keyboard backlight timeout toggle; current keyboard brightness remains a separate keyboard subsystem concern.".to_string()),
-            ),
-            live_zone_status: status_from_result(
-                live_zones,
-                "service cmd 12",
-                Reliability::Live,
-                Some("Service cmd 12 low byte maps 1=enabled and 0=disabled for per-zone live status.".to_string()),
             ),
             sticky_keys_live: match sticky {
                 Ok(value) => Status {
@@ -166,9 +158,8 @@ pub fn print_text(status: &AppStatus) {
     print_item("state", &status.fan.state);
     println!();
     println!("[keyboard]");
-    print_item("persisted_state", &status.keyboard.persisted_state);
+    print_item("state", &status.keyboard.state);
     print_item("backlight_timeout_live", &status.keyboard.backlight_timeout_live);
-    print_item("live_zone_status", &status.keyboard.live_zone_status);
     print_item("sticky_keys_live", &status.keyboard.sticky_keys_live);
     print_item(
         "win_menu_key_lock_live",

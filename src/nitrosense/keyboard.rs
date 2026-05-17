@@ -10,6 +10,7 @@ use xmltree::{Element, XMLNode};
 const CMD_SET_KB_BACKLIGHT: u16 = 27;
 const CMD_SET_RGB_KB: u16 = 28;
 const CMD_SET_LED_BEHAVIOR: u16 = 29;
+#[allow(dead_code)]
 const CMD_GET_LED_GROUP_COLOR: u16 = 12;
 const CMD_ADMIN_SET_STICKY_KEYS: u16 = 2;
 const CMD_SET_GAMING_PROFILE: u16 = 9;
@@ -150,17 +151,14 @@ pub fn read_state() -> Result<KeyboardState> {
     parse_profile_state(&system_profile_xml_path()?)
 }
 
+#[allow(dead_code)]
 pub fn read_zone_statuses() -> Result<Vec<ZoneState>> {
-    let mut result = Vec::new();
-    for (index, zone_id) in [(1, 1u32), (2, 2), (3, 4), (4, 8)] {
-        let (_, value) = pipe::service_get_u64(CMD_GET_LED_GROUP_COLOR, &[pipe::u32_arg(zone_id)])?;
-        result.push(ZoneState {
-            index,
-            status: decode_live_zone_status(value),
-            color: "live-status-only".to_string(),
-        });
+    for zone_id in [1u32, 2, 4, 8] {
+        let _ = pipe::service_get_u64(CMD_GET_LED_GROUP_COLOR, &[pipe::u32_arg(zone_id)])?;
     }
-    Ok(result)
+    bail!(
+        "service cmd 12 does not provide trustworthy per-zone on/off state on this machine; NitroSense and the physical keyboard can show mixed on/off zones while all zone replies remain identical. NitroSense's managed keyboard UI appears to restore keyboard state from XML instead of using cmd 12 as a live source."
+    )
 }
 
 pub fn read_sticky_keys() -> Result<sticky_keys::StickyKeysState> {
@@ -676,10 +674,6 @@ fn zone_id(index: u8) -> u64 {
     }
 }
 
-fn decode_live_zone_status(value: u64) -> bool {
-    (value & 0xFF) != 0
-}
-
 fn ensure_success(cmd: u16, raw: &[u8], return_code: u32) -> Result<()> {
     if return_code != 0 {
         bail!(
@@ -965,9 +959,4 @@ mod tests {
         assert_eq!(resolved.direction, Some(DEFAULT_DYNAMIC_DIRECTION));
     }
 
-    #[test]
-    fn live_zone_status_byte_one_means_enabled() {
-        assert!(decode_live_zone_status(1));
-        assert!(!decode_live_zone_status(0));
-    }
 }

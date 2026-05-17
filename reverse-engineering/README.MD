@@ -42,11 +42,47 @@ Use one NitroSense UI action per experiment.
   - those per-fan custom fields are only active truth when `CurrentFanMode=2` (`custom`); outside custom mode they are remembered slider state
 - Keyboard brightness, static/dynamic mode, and RGB colors are currently treated as NitroSense persisted XML state because no trusted live getter has been found.
 - NitroSense keyboard brightness currently tracks `LightingEffects.brightness` for both static and dynamic observations. `Key.brightness` can remain stale and should not be treated as the slider truth by itself.
-- Keyboard zone enabled/disabled state has a useful live getter. Service command `12` low byte currently validates as `1=enabled`, `0=disabled`.
+- Keyboard zone enabled/disabled state does not currently have a trustworthy validated live getter on this machine:
+  - `service cmd 12` returned identical replies for all four zones during a mixed NitroSense-visible static pattern
+  - NitroSense and the physical keyboard showed `zone1=on`, `zone2=off`, `zone3=on`, `zone4=off`
+  - all four raw replies still came back as `01080000000100000000000000`
+  - RESense therefore no longer treats `cmd 12` as a supported live per-zone on/off source
+- Wider raw sweeps across the currently known getter families also failed to reveal an independent keyboard-state getter:
+  - a controlled baseline snapshot was taken at `static + all zones on + red + brightness 5`
+  - a second snapshot was taken after changing only keyboard brightness to NitroSense's darkest visible state (`brightness=1`, physically dark)
+  - command families `10`, `12`, `20`, and `34` were swept and compared between the two states
+  - none of the successful raw replies changed with that visible hardware brightness transition
+  - current conclusion: there is no validated independent live keyboard-state getter in the currently known service/query surface on this machine
+- Managed NitroSense decompilation now supports the XML-first keyboard model:
+  - `Popup_Lighting.load_lighting_profile()` restores static/dynamic mode, brightness, zone status, and zone colors from `LightingProfileXML`
+  - `LightingDynamicUI.load_lighting_profile()` restores the dynamic effect, speed, direction, and pattern color from `LightingProfileXML`
+  - `LightingDynamicUI.Set_Dynamic_Keyboard()` then pushes the current XML-backed dynamic state to command `27`
+  - `Popup_Lighting.Set_Static_Keyboard_Set_Status()` / `Set_Static_Keyboard_ZoneButton_Color()` restore static UI state from XML and then push commands `27`, `28`, and `29`
+  - there are no managed GUI call sites for `GetAcerGamingLEDGroupColor` (`cmd 12`)
+  - the managed GUI uses `LightingEffects.brightness`, not `Key.brightness`, as the effective keyboard brightness source
 - Backlight timeout is now treated as a validated keyboard-lighting feature:
   - service getter byte `[40..47]` confirms timeout `0` or `30`
   - RESense writes and NitroSense UI stayed aligned on the timeout toggle
   - the extra getter/setter brightness byte is real but is not part of the supported surface because it did not control immediate or post-timeout keyboard brightness on this machine
+- NitroSense XML is currently the strongest keyboard state source on this machine:
+  - static mode, dynamic mode, dynamic direction, dynamic brightness, and remembered static zones all tracked NitroSense UI changes correctly
+  - `LightingEffects.brightness` tracked the effective visible brightness; `Key.brightness` can remain stale
+  - validated writes and visible hardware behavior:
+    - `resense keyboard brightness 5`
+    - `resense keyboard dynamic wave --direction from-left`
+    - `resense keyboard dynamic breathing`
+    - `resense keyboard dynamic breathing --speed 9 --color 00FFFF`
+    - `resense keyboard static --zone1 FF0000 --zone2 off --zone3 00FF00 --zone4 off`
+    - `resense keyboard static --zone1 0000FF`
+  - verified dynamic writes:
+    - `resense keyboard dynamic wave --direction from-left`
+    - `resense keyboard dynamic breathing`
+  - verified static write leaving dynamic mode:
+    - `resense keyboard static --zone1 FF0000 --zone2 off --zone3 00FF00 --zone4 off`
+  - validated partial static write:
+    - `resense keyboard static --zone1 0000FF`
+    - only zone 1 changed; other zones and brightness stayed untouched
+  - NitroSense preserves last zone colors even when a zone is off; RESense mirrors that XML behavior
 - Operation mode, LCD Overdrive, and Windows/Menu lock have live readback paths.
 - Supported operation mode mapping is now validated on this machine:
   - service command `34/query 11` matched NitroSense `Quiet`, `Default`, and `Performance`
