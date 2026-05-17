@@ -204,7 +204,6 @@ pub enum ToggleState {
 pub enum SoundBackend {
     Auto,
     Dts,
-    Waves,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]

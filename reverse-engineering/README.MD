@@ -48,6 +48,35 @@ Use one NitroSense UI action per experiment.
   - RESense writes and NitroSense UI stayed aligned on the timeout toggle
   - the extra getter/setter brightness byte is real but is not part of the supported surface because it did not control immediate or post-timeout keyboard brightness on this machine
 - Operation mode, LCD Overdrive, and Windows/Menu lock have live readback paths.
+- Supported operation mode mapping is now validated on this machine:
+  - service command `34/query 11` matched NitroSense `Quiet`, `Default`, and `Performance`
+  - validated mode codes are `0=quiet`, `1=default`, `4=performance`
+  - `CurrentOperationMode` mirrored those values correctly in NitroSense registry state
+  - in discrete-only mode / some NVIDIA states, WhisperMode may appear unavailable or inactive
+  - in hybrid mode with NVIDIA App exposing WhisperMode, `resense mode quiet` changed WhisperMode from `Off` to an active `60 FPS` setting
+  - WhisperMode therefore remains a real but environment-dependent side effect, not the primary source of truth for operation mode state
+- DTS-backed sound mapping is now validated on this machine with headphones disconnected:
+  - NitroSense `Acer TrueHarmony` matched the DTS backend
+  - validated preset codes are:
+    - `0=music`
+    - `1=movies`
+    - `2=voice`
+    - `3=strategy`
+    - `4=rpg`
+    - `5=shooter`
+    - `6=custom`
+    - `10=auto`
+  - verified CLI writes:
+    - `resense sound music` -> NitroSense `Müzik`
+    - `resense sound auto` -> NitroSense `Otomatik`
+    - `resense sound shooter` -> NitroSense `Nişancı`
+  - RESense now treats this DTS/internal-speaker path as the only supported sound surface
+- Bluetooth headphone output changed the NitroSense menu to a different preset surface and no longer stayed on the validated DTS path:
+  - RESense observed `backend=waves` and `dts_supported=false`
+  - NitroSense clicks and RESense writes both left the live preset pinned at `music`
+  - NitroSense indicates this surface is for internal speakers and `3.5 mm` audio devices
+  - RESense therefore now treats Bluetooth/non-DTS output as unsupported instead of leaving an active Waves fallback in the supported code path
+  - remaining sound gap is later validation of the wired `3.5 mm` Waves path
 
 ## Experiment Rules
 

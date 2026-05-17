@@ -120,21 +120,68 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Operation Mode
 
-- [ ] Fully decode the operation mode status byte and document what it means.
-- [ ] Verify whether the service getter is sufficient to represent the real applied mode in all cases.
-- [ ] Verify whether the registry mode code is authoritative, merely persisted UI state, or only a compatibility mirror.
-- [ ] Verify the exact role of WhisperMode integration during quiet mode transitions.
-- [ ] Decide whether WhisperMode failure should remain best-effort or become explicit user-visible behavior.
+- [x] Fully decode the supported operation mode mapping.
+  Verified on 2026-05-17:
+  - `quiet` -> `mode_code=0`
+  - `default` -> `mode_code=1`
+  - `performance` -> `mode_code=4`
+  - service getter `status` remained `0` in all validated visible NitroSense modes
+- [x] Verify whether the service getter is sufficient to represent the real applied mode in the supported visible mode set.
+  Verified on 2026-05-17:
+  - NitroSense `Default`, `Performance`, and `Quiet` all matched `service cmd 34/query 11`
+- [x] Verify whether the registry mode code is authoritative, merely persisted UI state, or only a compatibility mirror.
+  Current conclusion:
+  - `HKLM\SOFTWARE\OEM\NitroSense\Overclock\CurrentOperationMode` mirrors the selected NitroSense mode code correctly
+  - the live source of truth remains `service cmd 34/query 11`
+- [x] Confirm that each supported mode write produces exactly the intended final NitroSense-visible state.
+  Verified on 2026-05-17:
+  - RESense writes for `default`, `performance`, and `quiet` all updated NitroSense visibly
+  - `quiet` still enforced the already-validated fan `global_auto` side effect
+- [x] Decide whether WhisperMode failure should remain best-effort or become explicit user-visible behavior.
+  Current conclusion:
+  - on this machine, WhisperMode visibility depends on the NVIDIA environment
+  - RESense should keep treating WhisperMode as best-effort and non-authoritative for the core mode-state model
+- [x] Verify the exact role of WhisperMode integration during quiet mode transitions on a machine/driver state where NVIDIA exposes a meaningful WhisperMode signal.
+  Verified on 2026-05-17 in hybrid mode with NVIDIA App:
+  - starting from NitroSense `default`, NVIDIA `WhisperMode` showed `Off`
+  - `resense mode quiet` switched NitroSense to `Quiet`
+  - NVIDIA `WhisperMode` changed from `Off` to an active `60 FPS` setting
+  - this confirms the admin-agent WhisperMode side effect is real when the NVIDIA stack exposes the feature
 - [ ] Validate whether return code `u32::MAX` is genuinely a success case and document why.
-- [ ] Confirm that each mode write produces exactly the intended final hardware and software state.
 
 # Sound
 
-- [ ] Fully decode DTS and Waves mode mappings, including currently `unknown` and `unavailable` cases.
-- [ ] Verify whether backend auto-resolution is always correct and whether registry support flags are sufficient.
-- [ ] Verify whether headphones or other device state alter sound command behavior in ways the CLI must report explicitly.
-- [ ] Confirm that write verification after preset changes is complete and reliable for both DTS and Waves paths.
-- [ ] Document the exact supported preset surface per backend and validate that unsupported combinations fail clearly and correctly.
+- [x] Narrow the currently supported sound surface to the validated DTS/internal-speaker path until a supported wired-headphone path is decoded.
+  Current conclusion:
+  - RESense now treats sound support as DTS-only
+  - Bluetooth headphone output is not part of the supported sound surface
+  - Waves validation is deferred until a supported `3.5 mm` device is available
+- [x] Finish the supported DTS mode map without leaving user-visible `unknown` states in the supported surface.
+  Verified on 2026-05-17 for the DTS-backed `Acer TrueHarmony` surface with headphones disconnected:
+  - `Otomatik` -> `auto` / `10`
+  - `Müzik` -> `music` / `0`
+  - `Film` -> `movies` / `1`
+  - `Ses` -> `voice` / `2`
+  - `Strateji` -> `strategy` / `3`
+  - `RPG` -> `rpg` / `4`
+  - `Nişancı` -> `shooter` / `5`
+  - `Özel Ses` -> `custom` / `6`
+- [x] Verify whether backend auto-resolution is always correct and whether registry support flags are sufficient for the supported sound path.
+  Current conclusion:
+  - `DTS_Audio_Support` is sufficient for the currently supported DTS/internal-speaker path
+  - when the default output changed to Bluetooth headphones, the backend no longer stayed on the validated DTS path
+  - that non-DTS state is now treated as unsupported rather than as an active supported fallback
+- [x] Verify whether headphones or other device state alter sound command behavior in ways the CLI must report explicitly.
+  Verified on 2026-05-17:
+  - Bluetooth headphones changed the NitroSense preset surface and the backend no longer matched the validated DTS path
+  - NitroSense notes this surface is intended for internal speakers and `3.5 mm` audio devices
+  - the CLI should therefore treat Bluetooth/non-DTS audio state as unsupported for now
+- [x] Confirm that write verification after preset changes is complete and reliable for the supported DTS path.
+  Verified on 2026-05-17 for DTS writes:
+  - `resense sound music` -> NitroSense `Müzik`
+  - `resense sound auto` -> NitroSense `Otomatik`
+  - `resense sound shooter` -> NitroSense `Nişancı`
+- [ ] Validate the supported wired-headphone Waves path later with a real `3.5 mm` device and document its exact preset surface.
 
 # Service, Pipes, and Sessions
 

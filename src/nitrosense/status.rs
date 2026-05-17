@@ -150,7 +150,7 @@ pub fn read_status() -> AppStatus {
                         value: Some(state),
                         source: "admin-agent sound getter".to_string(),
                         reliability,
-                        note: Some("DTS code 9 means unavailable, not a visible NitroSense preset.".to_string()),
+                        note: Some("The supported sound surface is currently the validated DTS/internal-speaker path. DTS code 9 means unavailable, not a visible NitroSense preset.".to_string()),
                     }
                 }
                 Err(error) => unavailable("admin-agent sound getter", error.to_string()),

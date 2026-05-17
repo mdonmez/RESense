@@ -5,8 +5,6 @@ use anyhow::bail;
 use serde::Serialize;
 use std::{thread, time::Duration};
 
-const CMD_GET_WAVES_SOUND_MODE: u16 = 11;
-const CMD_SET_WAVES_SOUND_MODE: u16 = 12;
 const CMD_GET_DTS_SOUND_MODE: u16 = 13;
 const CMD_SET_DTS_SOUND_MODE: u16 = 14;
 const ADMIN_GET_REPLY_SIZE: usize = 9;
@@ -21,14 +19,9 @@ pub struct SoundState {
 }
 
 pub fn set_preset(backend: SoundBackend, preset: SoundPreset) -> Result<()> {
-    let resolved = resolve_backend(backend);
-    let mode_code = preset_code(resolved, preset)?;
-    let set_cmd = match resolved {
-        SoundBackend::Dts => CMD_SET_DTS_SOUND_MODE,
-        SoundBackend::Waves => CMD_SET_WAVES_SOUND_MODE,
-        SoundBackend::Auto => unreachable!("backend should be resolved"),
-    };
-    send_admin_set(set_cmd, mode_code)?;
+    let resolved = resolve_supported_backend(backend)?;
+    let mode_code = preset_code(preset);
+    send_admin_set(CMD_SET_DTS_SOUND_MODE, mode_code)?;
     thread::sleep(Duration::from_millis(100));
     let state = read_backend(resolved)?;
     if state.mode_code != mode_code as i32 {
@@ -41,17 +34,12 @@ pub fn set_preset(backend: SoundBackend, preset: SoundPreset) -> Result<()> {
 }
 
 pub fn read_state() -> Result<SoundState> {
-    read_backend(resolve_backend(SoundBackend::Auto))
+    read_backend(resolve_supported_backend(SoundBackend::Auto)?)
 }
 
 fn read_backend(backend: SoundBackend) -> Result<SoundState> {
-    let get_cmd = match backend {
-        SoundBackend::Dts => CMD_GET_DTS_SOUND_MODE,
-        SoundBackend::Waves => CMD_GET_WAVES_SOUND_MODE,
-        SoundBackend::Auto => unreachable!("backend should be resolved"),
-    };
-    let mode_code = send_admin_get(get_cmd)?;
-    let reliability = if backend == SoundBackend::Dts && mode_code == 9 {
+    let mode_code = send_admin_get(CMD_GET_DTS_SOUND_MODE)?;
+    let reliability = if mode_code == 9 {
         "unavailable"
     } else {
         "live"
@@ -65,11 +53,12 @@ fn read_backend(backend: SoundBackend) -> Result<SoundState> {
     })
 }
 
-fn resolve_backend(backend: SoundBackend) -> SoundBackend {
+fn resolve_supported_backend(backend: SoundBackend) -> Result<SoundBackend> {
     match backend {
-        SoundBackend::Auto if dts_supported() => SoundBackend::Dts,
-        SoundBackend::Auto => SoundBackend::Waves,
-        explicit => explicit,
+        SoundBackend::Auto | SoundBackend::Dts if dts_supported() => Ok(SoundBackend::Dts),
+        SoundBackend::Auto | SoundBackend::Dts => bail!(
+            "the current default output is not on the validated DTS path; only the internal-speaker DTS sound path is supported right now"
+        ),
     }
 }
 
@@ -107,25 +96,16 @@ fn send_admin_set(cmd_code: u16, mode_code: u32) -> Result<()> {
     }
 }
 
-fn preset_code(backend: SoundBackend, preset: SoundPreset) -> Result<u32> {
-    match backend {
-        SoundBackend::Dts => match preset {
-            SoundPreset::Music => Ok(0),
-            SoundPreset::Movies => Ok(1),
-            SoundPreset::Voice => Ok(2),
-            SoundPreset::Strategy => Ok(3),
-            SoundPreset::Rpg => Ok(4),
-            SoundPreset::Shooter => Ok(5),
-            SoundPreset::Custom => Ok(6),
-            SoundPreset::Auto => Ok(10),
-        },
-        SoundBackend::Waves => match preset {
-            SoundPreset::Music => Ok(0),
-            SoundPreset::Movies => Ok(1),
-            SoundPreset::Voice => Ok(3),
-            _ => bail!("{preset} is not supported by the Waves backend"),
-        },
-        SoundBackend::Auto => unreachable!("backend should be resolved"),
+fn preset_code(preset: SoundPreset) -> u32 {
+    match preset {
+        SoundPreset::Music => 0,
+        SoundPreset::Movies => 1,
+        SoundPreset::Voice => 2,
+        SoundPreset::Strategy => 3,
+        SoundPreset::Rpg => 4,
+        SoundPreset::Shooter => 5,
+        SoundPreset::Custom => 6,
+        SoundPreset::Auto => 10,
     }
 }
 
@@ -143,15 +123,6 @@ fn preset_name(backend: SoundBackend, code: i32) -> &'static str {
             10 => "auto",
             _ => "unknown",
         },
-        SoundBackend::Waves => match code {
-            0 => "music",
-            1 => "movies",
-            2 => "general",
-            3 => "voice",
-            4 => "fps",
-            5 => "sports",
-            _ => "unknown",
-        },
         SoundBackend::Auto => "unknown",
     }
 }
@@ -162,13 +133,7 @@ mod tests {
 
     #[test]
     fn maps_dts_presets() {
-        assert_eq!(
-            preset_code(SoundBackend::Dts, SoundPreset::Shooter).unwrap(),
-            5
-        );
-        assert_eq!(
-            preset_code(SoundBackend::Dts, SoundPreset::Auto).unwrap(),
-            10
-        );
+        assert_eq!(preset_code(SoundPreset::Shooter), 5);
+        assert_eq!(preset_code(SoundPreset::Auto), 10);
     }
 }
