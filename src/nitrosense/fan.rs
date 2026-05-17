@@ -1,19 +1,17 @@
 use crate::cli::{FanMode, FanSpeedArgs};
 use crate::error::Result;
 use crate::platform::{pipe, registry};
-use anyhow::{Context, bail};
+use anyhow::bail;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 const CMD_GET_GAMING_SYSINFO: u16 = 13;
-const CMD_GET_GAMING_PROFILE_CONFIG: u16 = 10;
 const CMD_SET_FAN_GROUP_BEHAVIOR: u16 = 15;
 const CMD_SET_FAN_GROUP_SPEED: u16 = 16;
 const SYSINFO_CPU_TEMP: u32 = 1;
 const SYSINFO_CPU_FAN_SPEED: u32 = 2;
 const SYSINFO_GPU_FAN_SPEED: u32 = 6;
 const SYSINFO_GPU_TEMP: u32 = 10;
-const LIVE_MODE_QUERY: u32 = 512;
 const FAN_MODE_AUTO_ENCODED: u64 = 9 | 4_259_840;
 const FAN_MODE_MAX_ENCODED: u64 = 9 | 8_519_680;
 const CUSTOM_MODE_CODE: u32 = 2;
@@ -53,24 +51,17 @@ pub struct HealthValue {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct LiveModeProbe {
-    pub mode_name: String,
-    pub trusted: bool,
-    pub mode_byte: u8,
-    pub note: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct FanState {
     pub cpu_temperature_c: HealthValue,
     pub gpu_temperature_c: HealthValue,
     pub cpu_fan_rpm: HealthValue,
     pub gpu_fan_rpm: HealthValue,
-    pub live_mode_probe: LiveModeProbe,
     pub persisted_mode: String,
     pub persisted_mode_code: u32,
     pub exact_mode_detail: String,
-    pub custom: BTreeMap<FanGroup, FanCustomState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_custom: Option<BTreeMap<FanGroup, FanCustomState>>,
+    pub remembered_custom: BTreeMap<FanGroup, FanCustomState>,
     pub note: String,
 }
 
@@ -107,20 +98,6 @@ pub fn set_speed(args: &FanSpeedArgs) -> Result<FanSpeedResult> {
         updates.insert(FanGroup::Gpu, state);
     }
 
-    if merged[&FanGroup::Cpu].auto && merged[&FanGroup::Gpu].auto {
-        let (raw, return_code) = pipe::service_set(
-            CMD_SET_FAN_GROUP_BEHAVIOR,
-            &[pipe::u64_arg(FAN_MODE_AUTO_ENCODED)],
-        )?;
-        ensure_success(CMD_SET_FAN_GROUP_BEHAVIOR, &raw, return_code)?;
-        sync_custom_registry(&merged, AUTO_MODE_CODE)?;
-        return Ok(FanSpeedResult {
-            mode: "global_auto".to_string(),
-            custom: merged,
-            registry_synced: true,
-        });
-    }
-
     let encoded = encode_exact_custom_behavior(&merged);
     let (raw, return_code) =
         pipe::service_set(CMD_SET_FAN_GROUP_BEHAVIOR, &[pipe::u64_arg(encoded)])?;
@@ -148,23 +125,27 @@ pub fn read_state() -> Result<FanState> {
     let gpu_temperature_c = read_health(SYSINFO_GPU_TEMP)?;
     let cpu_fan_rpm = read_health(SYSINFO_CPU_FAN_SPEED)?;
     let gpu_fan_rpm = read_health(SYSINFO_GPU_FAN_SPEED)?;
-    let live_mode_probe = read_live_mode_probe()?;
     let persisted_mode_code = registry::read_hklm_dword(registry::FAN_CONTROL, "CurrentFanMode")?;
     let persisted_mode = mode_name(persisted_mode_code).to_string();
-    let custom = read_custom_state()?;
-    let exact_mode_detail = describe_exact_mode(&persisted_mode, &custom);
+    let remembered_custom = read_custom_state()?;
+    let exact_mode_detail = describe_exact_mode(&persisted_mode, &remembered_custom);
+    let active_custom = if persisted_mode == "custom" {
+        Some(remembered_custom.clone())
+    } else {
+        None
+    };
 
     Ok(FanState {
         cpu_temperature_c,
         gpu_temperature_c,
         cpu_fan_rpm,
         gpu_fan_rpm,
-        live_mode_probe,
         persisted_mode,
         persisted_mode_code,
         exact_mode_detail,
-        custom,
-        note: "Live RPM and temperatures are trusted; exact mixed fan detail comes from HKLM NitroSense FanControl.".to_string(),
+        active_custom,
+        remembered_custom,
+        note: "RPM and temperatures come from live service getters. Exact active fan mode is resolved from HKLM NitroSense FanControl: CurrentFanMode is the authoritative high-level mode, and the per-fan custom fields only describe the active state when CurrentFanMode=custom. This model was re-verified against NitroSense on 2026-05-17.".to_string(),
     })
 }
 
@@ -175,37 +156,6 @@ fn read_health(index: u32) -> Result<HealthValue> {
         value: ((value >> 8) & 0xFFFF) as u16,
         trusted: (value & 0xFF) == 0,
         query,
-    })
-}
-
-fn read_live_mode_probe() -> Result<LiveModeProbe> {
-    let (raw, _) = pipe::service_get_u64(
-        CMD_GET_GAMING_PROFILE_CONFIG,
-        &[pipe::u32_arg(LIVE_MODE_QUERY)],
-    )?;
-    let mode_byte = *raw
-        .get(7)
-        .context("live fan mode reply missing mode byte")?;
-    let (mode_name, trusted, note) = match mode_byte {
-        2 => ("max", true, "Live getter reliably reports Max."),
-        3 => (
-            "custom",
-            true,
-            "Live getter reliably reports Custom when CPU fan control is manual.",
-        ),
-        1 => (
-            "auto_like",
-            false,
-            "Auto-like currently covers true global Auto, custom-all-auto, and GPU-only manual custom states.",
-        ),
-        _ => ("unknown", false, "Live mode probe is not fully decoded."),
-    };
-
-    Ok(LiveModeProbe {
-        mode_name: mode_name.to_string(),
-        trusted,
-        mode_byte,
-        note: note.to_string(),
     })
 }
 
@@ -364,6 +314,27 @@ mod tests {
             ),
         ]);
         assert_eq!(encode_exact_custom_behavior(&state), 0x430009);
+    }
+
+    #[test]
+    fn encodes_custom_all_auto_behavior() {
+        let state = BTreeMap::from([
+            (
+                FanGroup::Cpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
+            (
+                FanGroup::Gpu,
+                FanCustomState {
+                    percent: 50,
+                    auto: true,
+                },
+            ),
+        ]);
+        assert_eq!(encode_exact_custom_behavior(&state), 0x410009);
     }
 
     #[test]

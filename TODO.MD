@@ -21,7 +21,7 @@
 # Reverse Engineering
 
 - [ ] Use restored NitroSense access as a live oracle: change one NitroSense UI setting at a time, then compare pipe traffic, HKLM state, ProgramData XML, hardware behavior, and `resense status`.
-- [x] Re-verify ambiguous fan readback boundaries. `mode_byte=1` now confirms a narrower `auto_like` bucket: true global Auto, custom-all-auto, and GPU-only manual custom states. `mode_byte=3` reliably identifies CPU-manual custom states.
+- [x] Complete fan read/write validation against NitroSense and remove unsupported ambiguity from the supported fan model.
 - [x] Re-test keyboard zone live readback. With NitroSense open on 2026-05-16, UI/XML showed all zones on while service command `12` returned `1` for all zones; RESense had the decode inverted and now treats low byte `1` as enabled.
 - [x] Confirm whether NitroSense dynamic lighting speed is actually `1..9`; UI Automation exposed `Speed_ScrollBar` range `1..9`, and RESense now accepts and documents `1..9` instead of the old `1..5` cap.
 - [x] Re-check keyboard brightness, static/dynamic mode, and RGB color readback while NitroSense is open. Static and dynamic observations both tracked slider brightness through `LightingEffects.brightness`; `Key.brightness` was stale in both modes and should not be treated as the live slider source by itself.

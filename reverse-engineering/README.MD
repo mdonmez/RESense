@@ -35,7 +35,11 @@ Use one NitroSense UI action per experiment.
 ## Current Assumptions To Re-Verify
 
 - Fan RPM and CPU/GPU temperatures are trusted live service values.
-- Fan mode live probe `mode_byte=1` is not a general Auto detector. It currently covers true global Auto, custom-all-auto, and GPU-only manual custom states. `mode_byte=3` reliably appears when CPU fan control is manual.
+- Fan active mode is now treated as a validated combined read model, not as a single live getter:
+  - live source: service command `13` for temperatures and RPM values
+  - exact active mode source: `HKLM\SOFTWARE\OEM\NitroSense\FanControl`
+  - NitroSense itself initializes the fan UI from `CurrentFanMode`, `CPUFanPercentage`, `GPU1FanPercentage`, `CPUFanCustomAuto`, and `GPU1FanCustomAuto`
+  - those per-fan custom fields are only active truth when `CurrentFanMode=2` (`custom`); outside custom mode they are remembered slider state
 - Keyboard brightness, static/dynamic mode, and RGB colors are currently treated as NitroSense persisted XML state because no trusted live getter has been found.
 - NitroSense keyboard brightness currently tracks `LightingEffects.brightness` for both static and dynamic observations. `Key.brightness` can remain stale and should not be treated as the slider truth by itself.
 - Keyboard zone enabled/disabled state has a useful live getter. Service command `12` low byte currently validates as `1=enabled`, `0=disabled`.

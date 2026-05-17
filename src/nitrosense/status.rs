@@ -15,6 +15,7 @@ pub struct Status<T: Serialize> {
 #[serde(rename_all = "snake_case")]
 pub enum Reliability {
     Live,
+    Validated,
     Partial,
     Persisted,
     Unavailable,
@@ -75,9 +76,9 @@ pub fn read_status() -> AppStatus {
         fan: FanStatus {
             state: status_from_result(
                 fan_state,
-                "service cmd 13 + service cmd 10/query 512 + HKLM NitroSense FanControl",
-                Reliability::Partial,
-                Some("RPM and temperatures are live; exact mixed fan detail is persisted.".to_string()),
+                "service cmd 13 + HKLM NitroSense FanControl, validated against NitroSense fan UI and service writes",
+                Reliability::Validated,
+                Some("RPM and temperatures are read live from the PredatorSense service. Exact active fan mode is resolved from CurrentFanMode plus per-fan custom registry fields when CurrentFanMode=custom.".to_string()),
             ),
         },
         keyboard: KeyboardStatus {
