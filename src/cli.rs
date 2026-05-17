@@ -150,11 +150,6 @@ pub enum DisplayCommands {
 pub struct BacklightTimeoutArgs {
     #[arg(help = "Enable or disable backlight timeout")]
     pub state: ToggleState,
-    #[arg(
-        long = "brightness-percent",
-        help = "Brightness percentage to use with timeout"
-    )]
-    pub brightness_percent: Option<u8>,
 }
 
 #[derive(Args, Debug)]

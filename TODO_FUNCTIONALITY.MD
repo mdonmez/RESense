@@ -96,12 +96,23 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Display
 
-- [ ] Fully decode backlight timeout read/write behavior, including brightness byte semantics.
-- [ ] Verify whether backlight timeout brightness is a live value, a persisted value, a stale value, or a mixed encoding.
-- [ ] Determine whether the timeout payload has any undocumented flags or alternate values beyond the current implementation.
+- [x] Narrow backlight timeout to the validated supported contract.
+  Verified on 2026-05-17:
+  - the supported timeout feature is enable/disable only
+  - the live getter reports timeout `0` or `30` correctly
+  - NitroSense and RESense stay visually aligned on the timeout toggle
+  - keyboard brightness remains owned by the `keyboard brightness` subsystem, not by `display`
+- [x] Resolve the hidden timeout brightness-byte caveat by removing it from the supported surface.
+  Current conclusion:
+  - the extra service byte is real and writable
+  - it is not sourced from `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\brightness_percentage`
+  - it did not affect immediate keyboard brightness or post-timeout wake brightness on this machine
+  - RESense no longer exposes it as a supported user-facing display control
+- [x] Confirm whether registry writes are required for timeout correctness or NitroSense synchronization.
+  Current conclusion:
+  - the timeout toggle works and NitroSense updates visually without relying on `brightness_percentage` registry writes
+- [ ] Determine whether the timeout payload has any undocumented flags or alternate values beyond the supported enable/disable contract.
 - [ ] Verify whether overdrive support and overdrive enabled state are fully and reliably readable on every supported machine variant.
-- [ ] Confirm whether registry writes are required for display correctness or only for NitroSense/UI synchronization.
-- [ ] Remove the current stale-brightness caveat by proving the behavior or narrowing the implementation contract.
 
 # Operation Mode
 

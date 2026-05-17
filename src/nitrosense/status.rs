@@ -129,7 +129,7 @@ pub fn read_status() -> AppStatus {
                 value: display::read_state(),
                 source: "service getters + HKLM NitroSense AdvanceSettings".to_string(),
                 reliability: Reliability::Partial,
-                note: Some("Backlight timeout brightness byte has the known stale-brightness caveat.".to_string()),
+                note: Some("Backlight timeout is validated as an enable/disable feature. LCD overdrive support and broader display behavior still need further validation.".to_string()),
             },
         },
         sound: SoundStatus {

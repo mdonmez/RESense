@@ -76,13 +76,7 @@ fn run(cli: Cli) -> Result<()> {
                 println!("display_overdrive={}", args.state);
             }
             DisplayCommands::BacklightTimeout(args) => {
-                if let Some(percent) = args.brightness_percent {
-                    validate::range("brightness-percent", percent, 0, 100)?;
-                }
-                nitrosense::display::set_backlight_timeout(
-                    args.state.enabled(),
-                    args.brightness_percent,
-                )?;
+                nitrosense::display::set_backlight_timeout(args.state.enabled())?;
                 println!("backlight_timeout={}", args.state);
             }
         },

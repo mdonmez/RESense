@@ -18,7 +18,6 @@ pub struct DisplayState {
     pub overdrive_supported: Option<bool>,
     pub overdrive_live: Option<bool>,
     pub backlight_timeout_live: Option<bool>,
-    pub backlight_brightness_percent_persisted: Option<u32>,
 }
 
 pub fn set_overdrive(enabled: bool) -> Result<()> {
@@ -33,24 +32,18 @@ pub fn set_overdrive(enabled: bool) -> Result<()> {
     ensure_success(CMD_SET_GAMING_PROFILE, &raw, return_code)
 }
 
-pub fn set_backlight_timeout(enabled: bool, brightness_percent: Option<u8>) -> Result<()> {
+pub fn set_backlight_timeout(enabled: bool) -> Result<()> {
     let bk_hotkey_number = registry::read_hklm_dword_default(
         registry::NITROSENSE,
         "BK_Hotkey_Number",
         DEFAULT_BK_HOTKEY_NUMBER,
     );
     let live = read_backlight_raw(bk_hotkey_number)?;
-    let brightness = brightness_percent.unwrap_or(live.brightness_percent);
     let timeout_seconds = if enabled { TIMEOUT_SECONDS } else { 0 };
-    let payload = build_backlight_set_payload(bk_hotkey_number, brightness, timeout_seconds);
+    let payload =
+        build_backlight_set_payload(bk_hotkey_number, live.brightness_percent, timeout_seconds);
     let (raw, return_code) = pipe::service_set(CMD_WMI_SET_FUNCTION, &[pipe::u64_arg(payload)])?;
-    ensure_success(CMD_WMI_SET_FUNCTION, &raw, return_code)?;
-    registry::set_hklm_dword(
-        registry::ADVANCED_SETTINGS,
-        "brightness_percentage",
-        brightness as u32,
-    )?;
-    Ok(())
+    ensure_success(CMD_WMI_SET_FUNCTION, &raw, return_code)
 }
 
 pub fn read_state() -> DisplayState {
@@ -58,11 +51,6 @@ pub fn read_state() -> DisplayState {
         overdrive_supported: get_lcd_overdrive_supported(),
         overdrive_live: read_overdrive().ok(),
         backlight_timeout_live: read_backlight_timeout().ok(),
-        backlight_brightness_percent_persisted: registry::read_hklm_dword(
-            registry::ADVANCED_SETTINGS,
-            "brightness_percentage",
-        )
-        .ok(),
     }
 }
 

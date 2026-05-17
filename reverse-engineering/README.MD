@@ -43,7 +43,11 @@ Use one NitroSense UI action per experiment.
 - Keyboard brightness, static/dynamic mode, and RGB colors are currently treated as NitroSense persisted XML state because no trusted live getter has been found.
 - NitroSense keyboard brightness currently tracks `LightingEffects.brightness` for both static and dynamic observations. `Key.brightness` can remain stale and should not be treated as the slider truth by itself.
 - Keyboard zone enabled/disabled state has a useful live getter. Service command `12` low byte currently validates as `1=enabled`, `0=disabled`.
-- Operation mode, LCD Overdrive, Windows/Menu lock, and parts of backlight timeout have live readback paths.
+- Backlight timeout is now treated as a validated enable/disable feature:
+  - service getter byte `[40..47]` confirms timeout `0` or `30`
+  - RESense writes and NitroSense UI stayed aligned on the timeout toggle
+  - the extra getter/setter brightness byte is real but is not part of the supported surface because it did not control immediate or post-timeout keyboard brightness on this machine
+- Operation mode, LCD Overdrive, and Windows/Menu lock have live readback paths.
 
 ## Experiment Rules
 
