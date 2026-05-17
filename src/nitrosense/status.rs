@@ -16,7 +16,6 @@ pub struct Status<T: Serialize> {
 pub enum Reliability {
     Live,
     Validated,
-    Partial,
     Persisted,
     Unavailable,
 }
@@ -39,6 +38,7 @@ pub struct FanStatus {
 #[derive(Debug, Clone, Serialize)]
 pub struct KeyboardStatus {
     pub persisted_state: Status<Option<keyboard::KeyboardState>>,
+    pub backlight_timeout_live: Status<Option<bool>>,
     pub live_zone_status: Status<Option<Vec<keyboard::ZoneState>>>,
     pub sticky_keys_live: Status<Option<bool>>,
     pub win_menu_key_lock_live: Status<Option<bool>>,
@@ -88,6 +88,12 @@ pub fn read_status() -> AppStatus {
                 Reliability::Persisted,
                 Some("Brightness, RGB colors, and static/dynamic mode use NitroSense ProgramData XML.".to_string()),
             ),
+            backlight_timeout_live: status_from_result(
+                display::read_backlight_timeout(),
+                "service cmd 20/backlight timeout getter",
+                Reliability::Validated,
+                Some("Validated against the NitroSense keyboard backlight timeout toggle; current keyboard brightness remains a separate keyboard subsystem concern.".to_string()),
+            ),
             live_zone_status: status_from_result(
                 live_zones,
                 "service cmd 12",
@@ -127,9 +133,9 @@ pub fn read_status() -> AppStatus {
         display: DisplayStatus {
             state: Status {
                 value: display::read_state(),
-                source: "service getters + HKLM NitroSense AdvanceSettings".to_string(),
-                reliability: Reliability::Partial,
-                note: Some("Backlight timeout is validated as an enable/disable feature. LCD overdrive support and broader display behavior still need further validation.".to_string()),
+                source: "service cmd 10/query 0 + HKLM NitroSense AdvanceSettings".to_string(),
+                reliability: Reliability::Validated,
+                note: Some("LCD_Overdrive_support is a capability flag from NitroSense registry state; overdrive_live is the current live service state validated against NitroSense UI toggles.".to_string()),
             },
         },
         sound: SoundStatus {
@@ -161,6 +167,7 @@ pub fn print_text(status: &AppStatus) {
     println!();
     println!("[keyboard]");
     print_item("persisted_state", &status.keyboard.persisted_state);
+    print_item("backlight_timeout_live", &status.keyboard.backlight_timeout_live);
     print_item("live_zone_status", &status.keyboard.live_zone_status);
     print_item("sticky_keys_live", &status.keyboard.sticky_keys_live);
     print_item(

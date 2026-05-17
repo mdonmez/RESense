@@ -83,6 +83,8 @@ pub struct KeyboardCommand {
 pub enum KeyboardCommands {
     #[command(about = "Set keyboard brightness")]
     Brightness(KeyboardBrightnessArgs),
+    #[command(about = "Enable or disable keyboard backlight timeout")]
+    BacklightTimeout(ToggleArgs),
     #[command(about = "Set 4-zone static keyboard lighting")]
     Static(KeyboardStaticArgs),
     #[command(about = "Set a dynamic keyboard lighting effect")]
@@ -142,14 +144,6 @@ pub struct DisplayCommand {
 pub enum DisplayCommands {
     #[command(about = "Enable or disable LCD overdrive")]
     Overdrive(ToggleArgs),
-    #[command(about = "Enable or disable keyboard backlight timeout")]
-    BacklightTimeout(BacklightTimeoutArgs),
-}
-
-#[derive(Args, Debug)]
-pub struct BacklightTimeoutArgs {
-    #[arg(help = "Enable or disable backlight timeout")]
-    pub state: ToggleState,
 }
 
 #[derive(Args, Debug)]

@@ -45,6 +45,10 @@ fn run(cli: Cli) -> Result<()> {
                 nitrosense::keyboard::set_brightness(args.level)?;
                 println!("keyboard_brightness={}", args.level);
             }
+            KeyboardCommands::BacklightTimeout(args) => {
+                nitrosense::display::set_backlight_timeout(args.state.enabled())?;
+                println!("keyboard_backlight_timeout={}", args.state);
+            }
             KeyboardCommands::Static(args) => {
                 validate::static_args(&args)?;
                 let state = nitrosense::keyboard::set_static(&args)?;
@@ -74,10 +78,6 @@ fn run(cli: Cli) -> Result<()> {
             DisplayCommands::Overdrive(args) => {
                 nitrosense::display::set_overdrive(args.state.enabled())?;
                 println!("display_overdrive={}", args.state);
-            }
-            DisplayCommands::BacklightTimeout(args) => {
-                nitrosense::display::set_backlight_timeout(args.state.enabled())?;
-                println!("backlight_timeout={}", args.state);
             }
         },
         Commands::Sound(args) => {

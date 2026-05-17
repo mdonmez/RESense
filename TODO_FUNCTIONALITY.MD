@@ -81,6 +81,16 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Keyboard
 
+- [x] Keep keyboard backlight timeout under the keyboard subsystem, not the display subsystem.
+  Current conclusion:
+  - the feature controls keyboard lighting behavior, not LCD behavior
+  - the command surface now lives under `keyboard`
+  - live status for the timeout toggle is reported with keyboard state
+- [x] Validate keyboard backlight timeout as a supported enable/disable feature.
+  Verified on 2026-05-17:
+  - NitroSense and RESense stay aligned on the timeout toggle
+  - the live getter reports timeout `0` or `30` correctly
+  - keyboard brightness remains owned by the `keyboard brightness` subsystem
 - [ ] Find and validate true live readback for keyboard brightness, if available.
 - [ ] Find and validate true live readback for keyboard static/dynamic mode, if available.
 - [ ] Find and validate true live readback for keyboard RGB colors, if available.
@@ -96,23 +106,17 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Display
 
-- [x] Narrow backlight timeout to the validated supported contract.
-  Verified on 2026-05-17:
-  - the supported timeout feature is enable/disable only
-  - the live getter reports timeout `0` or `30` correctly
-  - NitroSense and RESense stay visually aligned on the timeout toggle
-  - keyboard brightness remains owned by the `keyboard brightness` subsystem, not by `display`
-- [x] Resolve the hidden timeout brightness-byte caveat by removing it from the supported surface.
+- [x] Narrow the display subsystem to LCD overdrive only.
   Current conclusion:
-  - the extra service byte is real and writable
-  - it is not sourced from `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\brightness_percentage`
-  - it did not affect immediate keyboard brightness or post-timeout wake brightness on this machine
-  - RESense no longer exposes it as a supported user-facing display control
-- [x] Confirm whether registry writes are required for timeout correctness or NitroSense synchronization.
-  Current conclusion:
-  - the timeout toggle works and NitroSense updates visually without relying on `brightness_percentage` registry writes
-- [ ] Determine whether the timeout payload has any undocumented flags or alternate values beyond the supported enable/disable contract.
-- [ ] Verify whether overdrive support and overdrive enabled state are fully and reliably readable on every supported machine variant.
+  - keyboard backlight timeout no longer belongs to `display`
+  - display support now means LCD overdrive capability and live state
+- [x] Verify whether overdrive support and overdrive enabled state are fully and reliably readable on the supported machine.
+  Verified on 2026-05-17 on this AN515-58:
+  - `LCD_Overdrive_support=1` is a capability flag, not current state
+  - NitroSense off matched `overdrive_live=false`
+  - RESense `display overdrive enable` flipped NitroSense back on visibly
+- [x] Finish the supported display contract and remove unsupported timeout-related caveats from it.
+  The supported display surface is now the validated LCD overdrive feature only.
 
 # Operation Mode
 

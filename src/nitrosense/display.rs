@@ -17,7 +17,6 @@ const TIMEOUT_SECONDS: u8 = 30;
 pub struct DisplayState {
     pub overdrive_supported: Option<bool>,
     pub overdrive_live: Option<bool>,
-    pub backlight_timeout_live: Option<bool>,
 }
 
 pub fn set_overdrive(enabled: bool) -> Result<()> {
@@ -50,7 +49,6 @@ pub fn read_state() -> DisplayState {
     DisplayState {
         overdrive_supported: get_lcd_overdrive_supported(),
         overdrive_live: read_overdrive().ok(),
-        backlight_timeout_live: read_backlight_timeout().ok(),
     }
 }
 
