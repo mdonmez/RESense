@@ -14,17 +14,17 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 ## Rules
 
-- [ ] Every supported read path must declare whether it is live, persisted, or a validated combination of both.
-- [ ] Every supported write path must have a verified readback path.
-- [ ] Every state mapping must be fully decoded. No `-like` buckets for supported functionality.
-- [ ] Every write command must define what it changes in hardware, service state, registry state, XML state, and NitroSense-visible state.
-- [ ] Every fallback or inferred behavior must either be fully validated or removed.
-- [ ] Every unsupported or not-yet-decoded behavior must be called out plainly in code and docs.
-- [ ] `reverse-engineering/README.MD` must stay aligned with the actual code and current confidence level.
+- [x] Every supported read path must declare whether it is live, persisted, or a validated combination of both.
+- [x] Every supported write path must have a verified readback path.
+- [x] Every state mapping must be fully decoded. No `-like` buckets for supported functionality.
+- [x] Every write command must define what it changes in hardware, service state, registry state, XML state, and NitroSense-visible state.
+- [x] Every fallback or inferred behavior must either be fully validated or removed.
+- [x] Every unsupported or not-yet-decoded behavior must be called out plainly in code and docs.
+- [x] `reverse-engineering/README.MD` must stay aligned with the actual code and current confidence level.
 
 # Cross-Cutting Work
 
-- [ ] Create a feature-by-feature source-of-truth matrix:
+- [x] Create a feature-by-feature source-of-truth matrix:
   - feature
   - live read path
   - persisted read path
@@ -32,12 +32,12 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - verification method
   - current confidence
   - unresolved questions
-- [ ] Define what "fully supported" means for each subsystem and apply that standard consistently.
-- [ ] Replace vague reliability wording with concrete wording tied to known commands, payloads, registry values, XML nodes, and observed hardware behavior.
-- [ ] Add repeatable verification procedures for each command so future changes can be re-validated quickly.
-- [ ] Record raw request and reply payloads for all supported read and write operations.
-- [ ] Identify every place where code currently infers state instead of reading it directly.
-- [ ] Identify every place where code writes persisted state as a synchronization step and verify whether that persisted state is actually authoritative, merely NitroSense-facing, or just a cache.
+- [x] Define what "fully supported" means for each subsystem and apply that standard consistently.
+- [x] Replace vague reliability wording with concrete wording tied to known commands, payloads, registry values, XML nodes, and observed hardware behavior.
+- [x] Add repeatable verification procedures for each command so future changes can be re-validated quickly.
+- [x] Record raw request and reply payloads for all supported read and write operations.
+- [x] Identify every place where code currently infers state instead of reading it directly.
+- [x] Identify every place where code writes persisted state as a synchronization step and verify whether that persisted state is actually authoritative, merely NitroSense-facing, or just a cache.
 
 # Fan
 
@@ -272,11 +272,11 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Service, Pipes, and Sessions
 
-- [ ] Catalog every named-pipe command currently used by RESense with exact payload encoding and decoded reply structure.
-- [ ] Identify any commands whose reply bytes are still only partially understood.
+- [x] Catalog every named-pipe command currently used by RESense with exact payload encoding and decoded reply structure.
+- [x] Identify any commands whose reply bytes are still only partially understood.
 - [ ] Verify session-dependent admin-agent behavior for sticky keys, WhisperMode, and sound operations.
 - [ ] Confirm whether there are cases where multiple active sessions change which admin pipe should be targeted.
-- [ ] Document failure modes for stopped, missing, or unhealthy service/admin-agent states.
+- [x] Document failure modes for stopped, missing, or unhealthy service/admin-agent states.
 
 # Verification and Transparency
 
@@ -287,15 +287,15 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - expected XML changes
   - expected live readback
   - expected NitroSense-visible result
-- [ ] Add a dedicated validation checklist for one-setting-at-a-time NitroSense comparison.
+- [x] Add a dedicated validation checklist for one-setting-at-a-time NitroSense comparison.
 - [ ] Keep a log of unresolved assumptions and do not silently treat them as settled behavior.
-- [ ] Remove or rename any code path, field name, or output label that implies certainty where only inference exists.
-- [ ] Once a feature is fully decoded, tighten code comments and output wording so they state exact behavior, not tentative behavior.
+- [x] Remove or rename any code path, field name, or output label that implies certainty where only inference exists.
+- [x] Once a feature is fully decoded, tighten code comments and output wording so they state exact behavior, not tentative behavior.
 
 # Exit Criteria
 
-- [ ] No supported feature depends on an ambiguous `-like` state.
-- [ ] No supported feature depends on undocumented inferred behavior.
-- [ ] Every supported write has exact, verified readback.
-- [ ] Every supported read clearly states and proves its source.
-- [ ] Docs, code, and observed hardware behavior all agree for the supported surface.
+- [x] No supported feature depends on an ambiguous `-like` state.
+- [x] No supported feature depends on undocumented inferred behavior.
+- [x] Every supported write has exact, verified readback.
+- [x] Every supported read clearly states and proves its source.
+- [x] Docs, code, and observed hardware behavior all agree for the supported surface.
