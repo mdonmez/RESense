@@ -123,6 +123,13 @@ Use one NitroSense UI action per experiment.
   - NitroSense indicates this surface is for internal speakers and `3.5 mm` audio devices
   - RESense therefore now treats Bluetooth/non-DTS output as unsupported instead of leaving an active Waves fallback in the supported code path
   - remaining sound gap is later validation of the wired `3.5 mm` Waves path
+- Multi-session admin-agent behavior is now partly validated:
+  - with two active Windows sessions, `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` can both exist at once
+  - direct sticky-key writes to each pipe affected different user sessions
+  - normal RESense sticky-key writes from the current session targeted the current session correctly in the validated case
+  - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
+  - DTS sound behaved differently: direct write to one session pipe changed the visible preset in both sessions, so the controlled DTS sound state is effectively shared/global on this machine
+  - remaining admin-session gap is WhisperMode behavior when multiple session pipes are alive
 
 ## Experiment Rules
 

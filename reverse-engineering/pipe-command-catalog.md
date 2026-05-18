@@ -305,4 +305,12 @@ Validated mode codes:
   - sticky keys
   - WhisperMode
   - DTS sound getter/setter
-- Multi-session behavior is not yet fully documented; current RESense behavior is "first working session wins".
+- Verified on 2026-05-18 for sticky keys:
+  - with `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` both alive, direct writes to each pipe affected different Windows sessions
+  - normal `resense keyboard sticky enable` from session `4` changed the current session only
+  - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
+- Verified on 2026-05-18 for DTS sound:
+  - with `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` both alive, direct `cmd 14` write to pipe `5` changed the visible NitroSense sound preset in both sessions
+  - normal `resense sound music` from session `4` also changed the visible preset in both sessions
+  - current conclusion: admin transport is session-addressed, but the DTS sound state it controls is effectively shared/global on this machine
+- WhisperMode multi-session behavior is not yet fully documented; current RESense behavior is still "first working session wins".

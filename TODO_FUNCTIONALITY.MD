@@ -285,8 +285,23 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 - [x] Catalog every named-pipe command currently used by RESense with exact payload encoding and decoded reply structure.
 - [x] Identify any commands whose reply bytes are still only partially understood.
-- [ ] Verify session-dependent admin-agent behavior for sticky keys, WhisperMode, and sound operations.
-- [ ] Confirm whether there are cases where multiple active sessions change which admin pipe should be targeted.
+- [x] Verify session-dependent admin-agent behavior for sticky keys.
+  Verified on 2026-05-18 with two active Windows sessions:
+  - current `Donmez` session id / admin pipe: `4`
+  - second `resense` session id / admin pipe: `5`
+  - direct write to `PredatorSense_admin_agent_5` changed sticky keys only in the `resense` session
+  - normal `resense keyboard sticky enable` from session `4` changed the current `Donmez` live sticky-key state only
+  - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
+- [ ] Verify session-dependent admin-agent behavior for WhisperMode.
+- [x] Verify session-dependent admin-agent behavior for sound operations.
+  Verified on 2026-05-18 with two active Windows sessions:
+  - direct write to `PredatorSense_admin_agent_5` changed NitroSense sound preset in both sessions
+  - normal `resense sound music` from session `4` also changed NitroSense sound preset in both sessions
+  - current conclusion: DTS sound preset control is transported through the session admin pipe but the controlled state is effectively shared/global on this machine
+- [x] Confirm whether there are cases where multiple active sessions change which admin pipe should be targeted.
+  Verified on 2026-05-18:
+  - with both `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` alive, explicit writes to each pipe affected different sessions
+  - admin-backed features are truly session-scoped and can target the wrong user session if the wrong pipe is chosen
 - [x] Document failure modes for stopped, missing, or unhealthy service/admin-agent states.
 
 # Verification and Transparency
