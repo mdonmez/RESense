@@ -28,10 +28,13 @@ pub fn set_operation_mode(mode: OperatingMode, skip_whispermode: bool) -> Result
 
     let (raw, return_code) =
         pipe::service_set(CMD_SET_OPERATION_MODE, &[pipe::u32_arg(mode_code as u32)])?;
-    if return_code != 0 && return_code != u32::MAX {
+    let state = wait_for_mode(mode_code)?;
+    if state.mode_code != mode_code {
         bail!(
-            "operation mode command failed with return_code={return_code} reply={}",
-            hex(&raw)
+            "operation mode verification failed: requested_mode_code={mode_code} return_code={return_code} reply={} live_mode_code={} live_status={}",
+            hex(&raw),
+            state.mode_code,
+            state.status
         );
     }
     registry::set_hklm_dword(
@@ -74,6 +77,23 @@ fn try_set_whispermode(enabled: bool) -> Result<()> {
         Err(error)
     } else {
         bail!("no admin-agent session candidates")
+    }
+}
+
+fn wait_for_mode(expected_mode_code: u8) -> Result<OperationModeState> {
+    let mut last_state = None;
+    for _ in 0..10 {
+        let state = read_state()?;
+        if state.mode_code == expected_mode_code {
+            return Ok(state);
+        }
+        last_state = Some(state);
+        thread::sleep(Duration::from_millis(200));
+    }
+    if let Some(state) = last_state {
+        Ok(state)
+    } else {
+        read_state()
     }
 }
 

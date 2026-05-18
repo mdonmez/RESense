@@ -94,6 +94,10 @@ Use one NitroSense UI action per experiment.
   - service command `34/query 11` matched NitroSense `Quiet`, `Default`, and `Performance`
   - validated mode codes are `0=quiet`, `1=default`, `4=performance`
   - `CurrentOperationMode` mirrored those values correctly in NitroSense registry state
+  - `cmd 30` reply codes are not authoritative enough to represent success or failure by themselves:
+    - the same raw reply / `u32::MAX` return code was observed for real state changes, a no-op, and at least one attempted write that initially did not change the live mode
+    - NitroSense's managed UI also ignores the numeric return from `set_operation_mode()`
+    - supported write verification therefore relies on re-reading `cmd 34/query 11`, not on trusting the `cmd 30` numeric reply
   - in discrete-only mode / some NVIDIA states, WhisperMode may appear unavailable or inactive
   - in hybrid mode with NVIDIA App exposing WhisperMode, `resense mode quiet` changed WhisperMode from `Off` to an active `60 FPS` setting
   - WhisperMode therefore remains a real but environment-dependent side effect, not the primary source of truth for operation mode state

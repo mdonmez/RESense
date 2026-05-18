@@ -234,7 +234,18 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - `resense mode quiet` switched NitroSense to `Quiet`
   - NVIDIA `WhisperMode` changed from `Off` to an active `60 FPS` setting
   - this confirms the admin-agent WhisperMode side effect is real when the NVIDIA stack exposes the feature
-- [ ] Validate whether return code `u32::MAX` is genuinely a success case and document why.
+- [x] Validate the real role of operation-mode return code `u32::MAX` and update the supported contract accordingly.
+  Current conclusion:
+  - `cmd 30` return codes are not authoritative enough to represent success or failure by themselves on this machine
+  - the same raw reply / `u32::MAX` return code was observed for:
+    - real mode changes (`default -> quiet`, `quiet -> default`)
+    - a no-op (`default -> default`)
+    - at least one write that initially did not change the live mode (`default -> performance`)
+  - NitroSense's own managed UI ignores the numeric return from `set_operation_mode()` and updates UI/registry before firing the service write
+  - the supported RESense contract is now:
+    - send `cmd 30`
+    - verify the final live mode through `cmd 34/query 11`
+    - sync `CurrentOperationMode` only after live verification succeeds
 
 # Sound
 

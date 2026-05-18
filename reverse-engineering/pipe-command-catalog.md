@@ -43,7 +43,7 @@ Current decoding convention:
 | `27` | service | keyboard backlight / dynamic payload setter | one `u64` payload | set return code | understood for supported path |
 | `28` | service | keyboard per-zone RGB setter | one `u64` payload | set return code | understood for supported path |
 | `29` | service | keyboard per-zone behavior setter | one `u64` payload | set return code | understood for supported path |
-| `30` | service | operation mode setter | one `u32` mode code | set return code | understood except `u32::MAX` success semantics |
+| `30` | service | operation mode setter | one `u32` mode code | set return code | understood for supported path; reply is non-authoritative |
 | `34` | service | gaming misc getter; used for operation mode | one `u32` query | `u64` value | understood for supported query `11` |
 
 ## Supported Command Details
@@ -259,10 +259,21 @@ Mode codes:
 - `1 default`
 - `4 performance`
 
-Known quirk:
+Known behavior on this machine:
 
-- RESense currently accepts `return_code == 0` or `u32::MAX`
-- the exact semantics of `u32::MAX` still need explicit justification
+- the numeric reply from `cmd 30` is not authoritative enough to represent success or failure by itself
+- observed raw reply for all tested writes in this environment: `0104000000ffffffff`
+- observed `return_code`: `u32::MAX`
+- despite the identical reply:
+  - `default -> quiet` changed the live mode to `quiet`
+  - `quiet -> default` changed the live mode to `default`
+  - `default -> default` was a no-op and stayed `default`
+  - `default -> performance` initially stayed `default`
+- NitroSense's managed UI also ignores the numeric result from `set_operation_mode()` and updates its UI/registry before firing the service write
+- supported RESense contract:
+  - send `cmd 30`
+  - verify success only through `cmd 34/query 11`
+  - treat the `cmd 30` reply as transport/debug data, not as authoritative state
 
 ### `cmd 34` service get
 
