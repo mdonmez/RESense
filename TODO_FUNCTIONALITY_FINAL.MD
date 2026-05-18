@@ -28,9 +28,7 @@ Scope rules:
   - direct write to `PredatorSense_admin_agent_5` changed sticky keys only in the `resense` session
   - normal `resense keyboard sticky enable` from session `4` changed the current `Donmez` live sticky-key state only
   - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
-- [ ] Verify session-dependent admin-agent behavior for:
-  - WhisperMode
-  - DTS sound getter/setter
+- [x] Verify session-dependent admin-agent behavior for DTS sound getter/setter.
   Verified on 2026-05-18 with two active Windows sessions:
   - direct write to `PredatorSense_admin_agent_5` changed NitroSense sound preset in both sessions
   - normal `resense sound music` from session `4` also changed NitroSense sound preset in both sessions
@@ -63,14 +61,14 @@ Scope rules:
 
 ### 2. Verification and Transparency
 
-- [ ] For every supported command, write down:
+- [x] For every supported command, write down:
   - command
   - expected service writes
   - expected registry changes
   - expected XML changes
   - expected live readback
   - expected NitroSense-visible result
-- [ ] Keep a dedicated unresolved-assumptions log and explicitly move items out of it only when validated.
+- [x] Keep a dedicated unresolved-assumptions log and explicitly move items out of it only when validated.
 
 ### 3. Deferred Hardware Validation
 
@@ -78,6 +76,4 @@ Scope rules:
 
 ## Recommended Order
 
-1. Service, Pipes, and Sessions
-2. Verification and Transparency
-3. Deferred wired `3.5 mm` Waves validation when hardware is available
+1. Deferred wired `3.5 mm` Waves validation when hardware is available

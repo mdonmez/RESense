@@ -316,7 +316,7 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Verification and Transparency
 
-- [ ] For every supported command, write down:
+- [x] For every supported command, write down:
   - command
   - expected service writes
   - expected registry changes
@@ -324,7 +324,7 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - expected live readback
   - expected NitroSense-visible result
 - [x] Add a dedicated validation checklist for one-setting-at-a-time NitroSense comparison.
-- [ ] Keep a log of unresolved assumptions and do not silently treat them as settled behavior.
+- [x] Keep a log of unresolved assumptions and do not silently treat them as settled behavior.
 - [x] Remove or rename any code path, field name, or output label that implies certainty where only inference exists.
 - [x] Once a feature is fully decoded, tighten code comments and output wording so they state exact behavior, not tentative behavior.
 
