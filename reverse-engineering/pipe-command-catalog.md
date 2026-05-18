@@ -313,4 +313,15 @@ Validated mode codes:
   - with `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` both alive, direct `cmd 14` write to pipe `5` changed the visible NitroSense sound preset in both sessions
   - normal `resense sound music` from session `4` also changed the visible preset in both sessions
   - current conclusion: admin transport is session-addressed, but the DTS sound state it controls is effectively shared/global on this machine
-- WhisperMode multi-session behavior is not yet fully documented; current RESense behavior is still "first working session wins".
+- Verified on 2026-05-18 for WhisperMode:
+  - after restart, active admin-agent pipes were `PredatorSense_admin_agent_1` and `PredatorSense_admin_agent_2`
+  - direct `cmd 15` write to pipe `2` changed NVIDIA WhisperMode to `On (60 FPS)` in both sessions while NitroSense mode stayed `Default`
+  - direct `cmd 15` write to pipe `1` changed NVIDIA WhisperMode back to `Off` in both sessions
+  - current conclusion: admin transport is session-addressed, but the WhisperMode state it controls is effectively shared/global on this machine
+- Supported targeting contract:
+  - session-scoped admin feature:
+    - `sticky keys` must target the current session admin pipe only and fail safely if it is unavailable
+  - effectively shared/global admin-backed features:
+    - WhisperMode
+    - DTS sound getter/setter
+    - these may use the first reachable admin pipe on this machine

@@ -292,7 +292,13 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - direct write to `PredatorSense_admin_agent_5` changed sticky keys only in the `resense` session
   - normal `resense keyboard sticky enable` from session `4` changed the current `Donmez` live sticky-key state only
   - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
-- [ ] Verify session-dependent admin-agent behavior for WhisperMode.
+- [x] Verify session-dependent admin-agent behavior for WhisperMode.
+  Verified on 2026-05-18 with two active Windows sessions after restart:
+  - current `Donmez` session / admin pipe: `1`
+  - second `resense` session / admin pipe: `2`
+  - direct write to `PredatorSense_admin_agent_2` changed NVIDIA WhisperMode to `On (60 FPS)` in both sessions while NitroSense mode stayed `Default`
+  - direct write to `PredatorSense_admin_agent_1` changed NVIDIA WhisperMode back to `Off` in both sessions
+  - current conclusion: WhisperMode control is transported through the session admin pipe but the controlled NVIDIA state is effectively shared/global on this machine
 - [x] Verify session-dependent admin-agent behavior for sound operations.
   Verified on 2026-05-18 with two active Windows sessions:
   - direct write to `PredatorSense_admin_agent_5` changed NitroSense sound preset in both sessions
@@ -302,6 +308,10 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   Verified on 2026-05-18:
   - with both `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` alive, explicit writes to each pipe affected different sessions
   - admin-backed features are truly session-scoped and can target the wrong user session if the wrong pipe is chosen
+- [x] Decide and implement the supported fallback contract for session-scoped vs shared/global admin-backed features.
+  Current conclusion:
+  - `keyboard sticky` must target the current session admin pipe only and fail safely if it is unavailable
+  - WhisperMode and DTS sound may continue to use the first reachable admin pipe because their controlled state is effectively shared/global on this machine
 - [x] Document failure modes for stopped, missing, or unhealthy service/admin-agent states.
 
 # Verification and Transparency

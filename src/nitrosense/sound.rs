@@ -68,7 +68,7 @@ fn dts_supported() -> bool {
 
 fn send_admin_get(cmd_code: u16) -> Result<i32> {
     let mut last_error = None;
-    for session_id in session::candidate_session_ids() {
+    for session_id in session::global_candidate_session_ids() {
         let pipe_name = session::admin_pipe_name(session_id);
         match pipe::send_set(&pipe_name, cmd_code, &[], ADMIN_GET_REPLY_SIZE) {
             Ok((raw, _)) => return Ok(i32::from_le_bytes(raw[5..9].try_into()?)),
@@ -83,7 +83,7 @@ fn send_admin_get(cmd_code: u16) -> Result<i32> {
 
 fn send_admin_set(cmd_code: u16, mode_code: u32) -> Result<()> {
     let mut last_error = None;
-    for session_id in session::candidate_session_ids() {
+    for session_id in session::global_candidate_session_ids() {
         let pipe_name = session::admin_pipe_name(session_id);
         match pipe::send_fire_and_forget(&pipe_name, cmd_code, &[pipe::u32_arg(mode_code)]) {
             Ok(()) => return Ok(()),

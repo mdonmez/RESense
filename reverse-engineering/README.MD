@@ -129,7 +129,10 @@ Use one NitroSense UI action per experiment.
   - normal RESense sticky-key writes from the current session targeted the current session correctly in the validated case
   - `HKLM\SOFTWARE\OEM\NitroSense\AdvanceSettings\StickyKey` is not a reliable cross-session truth source by itself
   - DTS sound behaved differently: direct write to one session pipe changed the visible preset in both sessions, so the controlled DTS sound state is effectively shared/global on this machine
-  - remaining admin-session gap is WhisperMode behavior when multiple session pipes are alive
+  - WhisperMode behaved the same way when NVIDIA exposed it again: direct write to one session pipe changed NVIDIA WhisperMode in both sessions while NitroSense mode stayed `Default`
+  - supported targeting contract now follows the validated behavior:
+    - session-scoped feature `keyboard sticky` targets the current session admin pipe only
+    - effectively shared/global features WhisperMode and DTS sound may use the first reachable admin pipe
 
 ## Experiment Rules
 

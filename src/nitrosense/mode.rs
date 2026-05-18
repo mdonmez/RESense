@@ -62,7 +62,7 @@ pub fn read_state() -> Result<OperationModeState> {
 
 fn try_set_whispermode(enabled: bool) -> Result<()> {
     let mut last_error = None;
-    for session_id in session::candidate_session_ids() {
+    for session_id in session::global_candidate_session_ids() {
         let pipe_name = session::admin_pipe_name(session_id);
         match pipe::send_fire_and_forget(
             &pipe_name,

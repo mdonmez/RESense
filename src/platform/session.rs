@@ -5,7 +5,11 @@ pub fn admin_pipe_name(session_id: u32) -> String {
     format!("{ADMIN_PIPE_PREFIX}{session_id}")
 }
 
-pub fn candidate_session_ids() -> Vec<u32> {
+pub fn current_admin_pipe_name() -> Result<String> {
+    Ok(admin_pipe_name(current_session_id()?))
+}
+
+pub fn global_candidate_session_ids() -> Vec<u32> {
     let mut ids = Vec::new();
     if let Ok(current) = current_session_id() {
         ids.push(current);

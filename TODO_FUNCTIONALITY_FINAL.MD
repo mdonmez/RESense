@@ -35,15 +35,31 @@ Scope rules:
   - direct write to `PredatorSense_admin_agent_5` changed NitroSense sound preset in both sessions
   - normal `resense sound music` from session `4` also changed NitroSense sound preset in both sessions
   - current conclusion: DTS sound preset control is transported through the session admin pipe but the controlled state is effectively shared/global on this machine
+- [x] Verify session-dependent admin-agent behavior for WhisperMode.
+  Verified on 2026-05-18 with two active Windows sessions after restart:
+  - current `Donmez` session / admin pipe: `1`
+  - second `resense` session / admin pipe: `2`
+  - direct write to `PredatorSense_admin_agent_2` changed NVIDIA WhisperMode to `On (60 FPS)` in both sessions while NitroSense mode stayed `Default`
+  - direct write to `PredatorSense_admin_agent_1` changed NVIDIA WhisperMode back to `Off` in both sessions
+  - current conclusion: WhisperMode control is transported through the session admin pipe but the controlled NVIDIA state is effectively shared/global on this machine
 - [x] Confirm whether multiple active sessions can change which admin pipe should be targeted.
   Verified on 2026-05-18:
   - with both `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` alive, explicit writes to each pipe affected different sessions
   - admin-backed features are therefore genuinely session-scoped and can affect the wrong user session if the wrong pipe is chosen
-- [ ] Decide whether "first working session wins" is the correct supported contract or whether session targeting must become explicit.
-- [ ] Record the exact failure mode when:
+- [x] Decide whether "first working session wins" is the correct supported contract or whether session targeting must become explicit.
+  Current conclusion:
+  - session-scoped admin features must target the current session explicitly
+  - effectively global/shared admin-backed features may use the first reachable admin pipe
+  - RESense now applies that split:
+    - `keyboard sticky` -> current session only
+    - `WhisperMode` and DTS sound -> first reachable admin pipe remains acceptable on this machine
+- [x] Record the exact failure mode when:
   - the current session has no admin pipe
   - a different session owns the only working admin pipe
   - multiple session pipes are present at once
+  Current conclusion:
+  - `keyboard sticky` now fails safely if the current session admin pipe is unavailable instead of falling through to another user session
+  - WhisperMode and DTS sound remain allowed to use another reachable admin pipe because their controlled state is effectively shared/global on this machine
 
 ### 2. Verification and Transparency
 

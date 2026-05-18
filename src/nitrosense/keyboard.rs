@@ -118,25 +118,19 @@ pub fn set_dynamic(args: &KeyboardDynamicArgs) -> Result<KeyboardState> {
 }
 
 pub fn set_sticky_keys(enabled: bool) -> Result<()> {
-    let mut last_error = None;
-    for session_id in session::candidate_session_ids() {
-        let pipe_name = session::admin_pipe_name(session_id);
-        match pipe::send_fire_and_forget(
-            &pipe_name,
-            CMD_ADMIN_SET_STICKY_KEYS,
-            &[pipe::u32_arg(enabled as u32)],
-        ) {
-            Ok(()) => {
-                registry::set_hklm_dword(registry::ADVANCED_SETTINGS, "StickyKey", enabled as u32)?;
-                return Ok(());
-            }
-            Err(error) => last_error = Some(error),
-        }
-    }
-    match last_error {
-        Some(error) => Err(error),
-        None => bail!("no admin-agent session candidates"),
-    }
+    let pipe_name = session::current_admin_pipe_name()?;
+    pipe::send_fire_and_forget(
+        &pipe_name,
+        CMD_ADMIN_SET_STICKY_KEYS,
+        &[pipe::u32_arg(enabled as u32)],
+    )
+    .with_context(|| {
+        format!(
+            "sticky keys target only the current session; failed to reach admin-agent pipe {pipe_name}"
+        )
+    })?;
+    registry::set_hklm_dword(registry::ADVANCED_SETTINGS, "StickyKey", enabled as u32)?;
+    Ok(())
 }
 
 pub fn set_win_menu_lock(enabled: bool) -> Result<()> {
