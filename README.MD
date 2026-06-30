@@ -14,6 +14,16 @@ The original outage was critical because it blocked access to basic device funct
 
 The purpose of RESense is to provide a small, programmable NitroSense-compatible control surface. Now that NitroSense works again, it also becomes a live reference application: settings can be changed in NitroSense while RESense observes named-pipe behavior, registry/XML state, and hardware readback in real time.
 
+## AI Agent Skills
+
+RESense is available as an [AI Agent Skill](https://agentskills.io/home). Add it to your agent environment with:
+
+```bash
+npx skills add https://github.com/mdonmez/RESense
+```
+
+This enables AI agents to query and control your Acer Nitro hardware directly. Learn more about AI Agent Skills at [agentskills.io](https://agentskills.io/home).
+
 ## Reverse Engineering Direction
 
 RESense is still built around the NitroSense/PredatorSense service surface: named pipes, NitroSense-owned HKLM registry state, ProgramData lighting XML, and live hardware getters where they exist.
