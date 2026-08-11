@@ -15,7 +15,6 @@ pub struct OperationModeState {
     pub mode: String,
     pub mode_code: u8,
     pub status: u8,
-    pub source: String,
 }
 
 pub fn set_operation_mode(mode: OperatingMode, skip_whispermode: bool) -> Result<()> {
@@ -56,7 +55,6 @@ pub fn read_state() -> Result<OperationModeState> {
         mode: mode_name(mode_code).to_string(),
         mode_code,
         status,
-        source: "service cmd 34/query 11".to_string(),
     })
 }
 

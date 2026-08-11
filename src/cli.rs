@@ -19,7 +19,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    #[command(about = "Read all current state")]
+    #[command(about = "Read current state")]
     Status(StatusArgs),
     #[command(about = "Manage fan control")]
     Fan(FanCommand),
@@ -35,8 +35,19 @@ pub enum Commands {
 
 #[derive(Args, Debug)]
 pub struct StatusArgs {
+    #[arg(value_enum, help = "Optional subsystem to read")]
+    pub target: Option<StatusTarget>,
     #[arg(long, help = "Print JSON instead of human-readable text")]
     pub json: bool,
+    #[arg(long, help = "Continue reading state at the selected interval")]
+    pub watch: bool,
+    #[arg(
+        long,
+        requires = "watch",
+        value_parser = clap::value_parser!(u64),
+        help = "Polling interval in seconds (default: 2)"
+    )]
+    pub interval: Option<u64>,
 }
 
 #[derive(Args, Debug)]
@@ -48,20 +59,16 @@ pub struct FanCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum FanCommands {
-    #[command(about = "Set the global fan mode")]
-    Mode(FanModeArgs),
-    #[command(about = "Set CPU and GPU fan speeds or auto mode")]
-    Speed(FanSpeedArgs),
+    #[command(about = "Set both fans to automatic control")]
+    Auto,
+    #[command(about = "Set both fans to maximum speed")]
+    Max,
+    #[command(about = "Set per-fan manual or automatic control")]
+    Custom(FanCustomArgs),
 }
 
 #[derive(Args, Debug)]
-pub struct FanModeArgs {
-    #[arg(help = "Fan mode: auto or max")]
-    pub mode: FanMode,
-}
-
-#[derive(Args, Debug)]
-pub struct FanSpeedArgs {
+pub struct FanCustomArgs {
     #[arg(long, help = "CPU fan speed percentage")]
     pub cpu: Option<u8>,
     #[arg(long, help = "GPU fan speed percentage")]
@@ -84,7 +91,7 @@ pub enum KeyboardCommands {
     #[command(about = "Set keyboard brightness")]
     Brightness(KeyboardBrightnessArgs),
     #[command(about = "Enable or disable keyboard backlight timeout")]
-    BacklightTimeout(ToggleArgs),
+    Timeout(ToggleArgs),
     #[command(about = "Set 4-zone static keyboard lighting")]
     Static(KeyboardStaticArgs),
     #[command(about = "Set a dynamic keyboard lighting effect")]
@@ -148,8 +155,6 @@ pub enum DisplayCommands {
 
 #[derive(Args, Debug)]
 pub struct SoundArgs {
-    #[arg(long, help = "Audio backend to use")]
-    pub backend: Option<SoundBackend>,
     #[arg(help = "Sound preset")]
     pub preset: SoundPreset,
 }
@@ -165,6 +170,15 @@ pub struct ToggleArgs {
 pub enum FanMode {
     Auto,
     Max,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+pub enum StatusTarget {
+    Fan,
+    Keyboard,
+    Mode,
+    Display,
+    Sound,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
@@ -201,13 +215,6 @@ pub enum ToggleState {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
-pub enum SoundBackend {
-    Auto,
-    Dts,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
 pub enum SoundPreset {
     Music,
     Movies,
@@ -240,5 +247,56 @@ display_value!(KeyboardDynamicMode);
 display_value!(Direction);
 display_value!(OperatingMode);
 display_value!(ToggleState);
-display_value!(SoundBackend);
 display_value!(SoundPreset);
+display_value!(StatusTarget);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parses_targeted_status() {
+        let cli = Cli::try_parse_from(["resense", "status", "fan", "--json"]).unwrap();
+        match cli.command {
+            Commands::Status(args) => {
+                assert_eq!(args.target, Some(StatusTarget::Fan));
+                assert!(args.json);
+                assert!(!args.watch);
+            }
+            _ => panic!("expected status command"),
+        }
+    }
+
+    #[test]
+    fn parses_direct_fan_commands() {
+        let cli =
+            Cli::try_parse_from(["resense", "fan", "custom", "--cpu", "70", "--gpu-auto"]).unwrap();
+
+        match cli.command {
+            Commands::Fan(command) => match command.command {
+                FanCommands::Custom(args) => {
+                    assert_eq!(args.cpu, Some(70));
+                    assert!(args.gpu_auto);
+                }
+                _ => panic!("expected custom fan command"),
+            },
+            _ => panic!("expected fan command"),
+        }
+    }
+
+    #[test]
+    fn rejects_removed_command_forms() {
+        for command in [
+            vec!["resense", "get", "fan"],
+            vec!["resense", "fan", "speed", "--cpu", "70"],
+            vec!["resense", "keyboard", "backlight-timeout", "enable"],
+            vec!["resense", "sound", "--backend", "dts", "music"],
+        ] {
+            assert!(
+                Cli::try_parse_from(command.clone()).is_err(),
+                "accepted {command:?}"
+            );
+        }
+    }
+}

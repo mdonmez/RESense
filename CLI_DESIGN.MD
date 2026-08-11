@@ -1,12 +1,11 @@
-# CLI Design Draft
+# CLI Design
 
 This file is the working draft for the next RESense CLI redesign.
 
 Status:
 
-- brainstorming only
-- not yet implemented
-- command names and hierarchy are still open to change
+- implemented in the public CLI
+- command names and hierarchy below are the current contract
 
 ## Design Goals
 
@@ -19,29 +18,21 @@ Status:
 
 ## Core Design Rule
 
-Do not force one read verb everywhere.
+Use one read-only command with an optional target:
 
-Instead:
+- `status` with no target means the whole system
+- `status <target>` means one subsystem
+- direct state/action commands perform writes
 
-- use `status` for whole-system overview
-- use `get` for subsystem-specific reads
-- use direct state/action commands for writes
-
-This avoids awkward trees like:
-
-```text
-resense sound status
-resense sound music
-```
-
-where `status` sits beside actual state values as if it were one of them.
+This keeps reads separate from mutations without placing `status` beside
+state values under every subsystem.
 
 ## Preferred Direction
 
 ```text
 resense
-├── status [--json] [--watch] [--interval <seconds>]
-├── get {fan|keyboard|mode|display|sound} [--json]
+├── status [fan|keyboard|mode|display|sound]
+│   [--json] [--watch] [--interval <seconds>]
 ├── fan
 │   ├── auto
 │   ├── max
@@ -59,51 +50,37 @@ resense
 │   └── win-menu {enable|disable}
 ├── display
 │   └── overdrive {enable|disable}
-├── sound
-│   └── <auto|music|movies|voice|strategy|rpg|shooter|custom> [--backend <auto|dts>]
-└── debug
-    └── ...
+└── sound
+    └── <auto|music|movies|voice|strategy|rpg|shooter|custom>
 ```
+
+Developer reverse-engineering probes remain separate Cargo binaries. They are
+not part of the normal `resense --help` command tree or the public CLI
+compatibility contract.
 
 ## Why This Direction Is Better
 
-### 1. `status` is now one thing
+### 1. `status` is the read-only entry point
 
 `status` means:
 
-- whole-machine overview
+- whole-machine overview when no target is supplied
+- one subsystem when a target is supplied
 
 Examples:
 
 ```text
 resense status
+resense status fan
+resense status keyboard
+resense status mode
+resense status display
+resense status sound
 resense status --json
 resense status --watch
 ```
 
-It is no longer scattered under every subsystem.
-
-### 2. `get` is now one thing
-
-`get` means:
-
-- read one subsystem in detail
-
-Examples:
-
-```text
-resense get fan
-resense get keyboard
-resense get mode
-resense get display
-resense get sound
-```
-
-This is cleaner than mixing:
-
-- `fan status`
-- `sound status`
-- no `mode status`
+There is no `get` command and no nested subsystem `status` command.
 
 ### 3. Write commands stay short and natural
 
@@ -149,7 +126,7 @@ Problem:
 - `status` looks like just another child command beside actual state values
 - `mode` becomes asymmetrical for no good reason
 
-### Bad: force `status` everywhere
+### Bad: force `status` under every subsystem
 
 ```text
 resense mode status
@@ -188,59 +165,61 @@ They use different patterns depending on the shape of the thing:
 - `aws ec2 describe-instances`
 - `systemctl status ssh`
 
-The lesson:
-
-- overview reads, resource reads, and mutating actions should not all be forced into one structure
-
+The lesson is to make the read operation explicit without adding ceremony.
 For RESense, the clean mapping is:
 
-- `status` -> overview
-- `get` -> subsystem read
+- `status` -> whole-system or targeted state read
 - direct commands -> mutations / state selection
 
-## Active Open Questions
+## Settled Design Decisions
 
-### 1. Should `get` support multiple targets?
+### Targeted reads
 
-Possible:
+`status` accepts at most one target. There is no `status all`; omitting the
+target already means all supported state.
 
-```text
-resense get fan keyboard mode
+### Developer tools
+
+Developer probes are kept outside the public command tree and are excluded
+from the public compatibility contract. They are used explicitly for
+development or reverse-engineering work.
+
+### Migration
+
+The redesign is a clean move. Old command forms are removed rather than kept
+as aliases, and the implementation does not promise backward compatibility
+with the current CLI skeleton.
+
+### Output shape
+
+Successful output reports only the resulting state: what RESense read or
+changed. It does not expose how the state was obtained.
+
+Normal text output may use concise labels and sections. JSON output uses the
+same state model for scripts. Neither successful output includes source paths,
+pipe names, query numbers, registry keys, reliability labels, or explanatory
+provenance fields.
+
+Errors may still explain why an operation failed; provenance is not part of a
+successful state response.
+
+Example JSON shape:
+
+```json
+{
+  "mode": "performance",
+  "fan": {
+    "mode": "custom",
+    "custom": {
+      "cpu": { "percent": 70, "auto": false },
+      "gpu": { "percent": 50, "auto": true }
+    }
+  },
+  "display": {
+    "overdrive": true
+  }
+}
 ```
-
-Or keep it simple:
-
-```text
-resense get fan
-```
-
-Current leaning:
-
-- keep `get` single-target
-
-### 2. Should `get` also support `all`?
-
-Possible:
-
-```text
-resense get all
-```
-
-But this may just duplicate `status`.
-
-Current leaning:
-
-- do not add `get all`
-- keep `status` as the overview read
-
-### 3. Should `debug` stay user-visible?
-
-Likely yes, but clearly separated from the supported normal UX.
-
-Current leaning:
-
-- keep `debug`
-- keep all probes and reverse-engineering helpers there
 
 ## Example Usage
 
@@ -249,9 +228,9 @@ resense status
 resense status --json
 resense status --watch --interval 2
 
-resense get fan
-resense get keyboard --json
-resense get mode
+resense status fan
+resense status keyboard --json
+resense status mode
 
 resense fan auto
 resense fan max
@@ -279,5 +258,7 @@ resense sound shooter
 
 - `fan custom` is preferred over `fan set`.
 - `sound` should avoid a `set` prefix and use direct preset names.
-- `status` should not be nested under subsystem parents in this design.
-- `--json` should remain available for scripting, but normal text output should be redesigned separately.
+- `status` is the only public read command and may take one subsystem target.
+- Developer probes are separate from the normal public command tree.
+- The redesign is a clean break; old command forms are not retained as aliases.
+- Successful text and JSON output report state only, without source/provenance metadata.

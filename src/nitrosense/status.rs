@@ -1,215 +1,167 @@
+use crate::cli::StatusTarget;
 use crate::nitrosense::{display, fan, keyboard, mode, sound};
-use crate::platform::registry;
 use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Status<T: Serialize> {
-    pub value: T,
-    pub source: String,
-    pub reliability: Reliability,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Reliability {
-    Live,
-    Validated,
-    Persisted,
-    Unavailable,
-}
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AppStatus {
-    pub status_model: String,
-    pub fan: FanStatus,
+    pub fan: Option<fan::FanState>,
     pub keyboard: KeyboardStatus,
-    pub mode: ModeStatus,
+    pub mode: Option<String>,
     pub display: DisplayStatus,
-    pub sound: SoundStatus,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct FanStatus {
-    pub state: Status<Option<fan::FanState>>,
+    pub sound: Option<sound::SoundState>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct KeyboardStatus {
-    pub state: Status<Option<keyboard::KeyboardState>>,
-    pub backlight_timeout_live: Status<Option<bool>>,
-    pub sticky_keys_live: Status<Option<bool>>,
-    pub win_menu_key_lock_live: Status<Option<bool>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ModeStatus {
-    pub live_mode: Status<Option<mode::OperationModeState>>,
-    pub persisted_mode_code: Status<Option<u32>>,
+    pub lighting: Option<keyboard::KeyboardState>,
+    pub backlight_timeout: Option<bool>,
+    pub sticky: Option<bool>,
+    pub win_menu: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DisplayStatus {
-    pub state: Status<display::DisplayState>,
+    pub overdrive: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SoundStatus {
-    pub live_preset: Status<Option<sound::SoundState>>,
+#[serde(untagged)]
+pub enum StatusOutput {
+    All(AppStatus),
+    Fan(Option<fan::FanState>),
+    Keyboard(KeyboardStatus),
+    Mode(Option<String>),
+    Display(DisplayStatus),
+    Sound(Option<sound::SoundState>),
 }
 
-pub fn read_status() -> AppStatus {
-    let fan_state = fan::read_state();
-    let keyboard_state = keyboard::read_state();
-    let sticky = keyboard::read_sticky_keys();
-    let win_menu = keyboard::read_win_menu_lock();
-    let mode_state = mode::read_state();
-    let persisted_mode =
-        registry::read_hklm_dword(registry::OVERCLOCK, "CurrentOperationMode").ok();
-    let sound_state = sound::read_state();
-
-    AppStatus {
-        status_model: "live_plus_nitrosense_persisted_state".to_string(),
-        fan: FanStatus {
-            state: status_from_result(
-                fan_state,
-                "service cmd 13 + HKLM NitroSense FanControl, validated against NitroSense fan UI and service writes",
-                Reliability::Validated,
-                Some("RPM and temperatures are read live from the PredatorSense service. Exact active fan mode is resolved from CurrentFanMode plus per-fan custom registry fields when CurrentFanMode=custom.".to_string()),
-            ),
-        },
-        keyboard: KeyboardStatus {
-            state: status_from_result(
-                keyboard_state,
-                "NitroSense system XML, validated against NitroSense UI and keyboard hardware for the supported keyboard surface",
-                Reliability::Validated,
-                Some("The supported keyboard state model is XML-backed on this machine: static vs dynamic mode, brightness, static zones, and dynamic effect metadata all tracked NitroSense and the physical keyboard in the validated cases, and no independent live keyboard getter has been found in the currently known service surface.".to_string()),
-            ),
-            backlight_timeout_live: status_from_result(
-                display::read_backlight_timeout(),
-                "service cmd 20/backlight timeout getter",
-                Reliability::Validated,
-                Some("Validated against the NitroSense keyboard backlight timeout toggle; current keyboard brightness remains a separate keyboard subsystem concern.".to_string()),
-            ),
-            sticky_keys_live: match sticky {
-                Ok(value) => Status {
-                    value: Some(value.nitrosense_enabled),
-                    source: "Windows SystemParametersInfo".to_string(),
-                    reliability: Reliability::Live,
-                    note: None,
-                },
-                Err(error) => unavailable("Windows SystemParametersInfo", error.to_string()),
-            },
-            win_menu_key_lock_live: status_from_result(
-                win_menu,
-                "service cmd 10/query 0",
-                Reliability::Live,
-                None,
-            ),
-        },
-        mode: ModeStatus {
-            live_mode: status_from_result(
-                mode_state,
-                "service cmd 34/query 11",
-                Reliability::Live,
-                None,
-            ),
-            persisted_mode_code: Status {
-                value: persisted_mode,
-                source: "HKLM NitroSense Overclock".to_string(),
-                reliability: Reliability::Persisted,
-                note: Some("NitroSense persisted UI state.".to_string()),
-            },
-        },
-        display: DisplayStatus {
-            state: Status {
-                value: display::read_state(),
-                source: "service cmd 10/query 0 + HKLM NitroSense AdvanceSettings".to_string(),
-                reliability: Reliability::Validated,
-                note: Some("LCD_Overdrive_support is a capability flag from NitroSense registry state; overdrive_live is the current live service state validated against NitroSense UI toggles.".to_string()),
-            },
-        },
-        sound: SoundStatus {
-            live_preset: match sound_state {
-                Ok(state) => {
-                    let reliability = if state.reliability == "unavailable" {
-                        Reliability::Unavailable
-                    } else {
-                        Reliability::Live
-                    };
-                    Status {
-                        value: Some(state),
-                        source: "admin-agent sound getter".to_string(),
-                        reliability,
-                        note: Some("The supported sound surface is the validated DTS path for internal speakers and 3.5 mm Realtek output. DTS code 9 means unavailable, not a visible NitroSense preset.".to_string()),
-                    }
-                }
-                Err(error) => unavailable("admin-agent sound getter", error.to_string()),
-            },
-        },
+pub fn read_status(target: Option<StatusTarget>) -> StatusOutput {
+    match target {
+        None => StatusOutput::All(AppStatus {
+            fan: read_fan(),
+            keyboard: read_keyboard(),
+            mode: read_mode(),
+            display: read_display(),
+            sound: read_sound(),
+        }),
+        Some(StatusTarget::Fan) => StatusOutput::Fan(read_fan()),
+        Some(StatusTarget::Keyboard) => StatusOutput::Keyboard(read_keyboard()),
+        Some(StatusTarget::Mode) => StatusOutput::Mode(read_mode()),
+        Some(StatusTarget::Display) => StatusOutput::Display(read_display()),
+        Some(StatusTarget::Sound) => StatusOutput::Sound(read_sound()),
     }
 }
 
-pub fn print_text(status: &AppStatus) {
-    println!("status_model={}", status.status_model);
-    println!();
-    println!("[fan]");
-    print_item("state", &status.fan.state);
-    println!();
-    println!("[keyboard]");
-    print_item("state", &status.keyboard.state);
-    print_item("backlight_timeout_live", &status.keyboard.backlight_timeout_live);
-    print_item("sticky_keys_live", &status.keyboard.sticky_keys_live);
-    print_item(
-        "win_menu_key_lock_live",
-        &status.keyboard.win_menu_key_lock_live,
-    );
-    println!();
-    println!("[mode]");
-    print_item("live_mode", &status.mode.live_mode);
-    print_item("persisted_mode_code", &status.mode.persisted_mode_code);
-    println!();
-    println!("[display]");
-    print_item("state", &status.display.state);
-    println!();
-    println!("[sound]");
-    print_item("live_preset", &status.sound.live_preset);
-}
+pub fn print_text(status: &StatusOutput, target: Option<StatusTarget>) {
+    let value = serde_json::to_value(status).unwrap_or(Value::Null);
+    if let Some(target) = target {
+        print_value_text(&target.to_string(), &value);
+        return;
+    }
 
-fn status_from_result<T: Serialize>(
-    result: anyhow::Result<T>,
-    source: &str,
-    reliability: Reliability,
-    note: Option<String>,
-) -> Status<Option<T>> {
-    match result {
-        Ok(value) => Status {
-            value: Some(value),
-            source: source.to_string(),
-            reliability,
-            note,
-        },
-        Err(error) => unavailable(source, error.to_string()),
+    if let Value::Object(values) = value {
+        for (name, value) in values {
+            print_value_text(&name, &value);
+        }
+    } else {
+        print_value_text("status", &value);
     }
 }
 
-fn unavailable<T: Serialize>(source: &str, note: String) -> Status<Option<T>> {
-    Status {
-        value: None,
-        source: source.to_string(),
-        reliability: Reliability::Unavailable,
-        note: Some(note),
+pub fn print_state_text(prefix: &str, state: &impl Serialize) -> serde_json::Result<()> {
+    let value = serde_json::to_value(state)?;
+    print_value_text(prefix, &value);
+    Ok(())
+}
+
+fn read_fan() -> Option<fan::FanState> {
+    fan::read_state().ok()
+}
+
+fn read_keyboard() -> KeyboardStatus {
+    KeyboardStatus {
+        lighting: keyboard::read_state().ok(),
+        backlight_timeout: display::read_backlight_timeout().ok(),
+        sticky: keyboard::read_sticky_keys()
+            .ok()
+            .map(|state| state.nitrosense_enabled),
+        win_menu: keyboard::read_win_menu_lock().ok(),
     }
 }
 
-fn print_item<T: Serialize>(name: &str, item: &Status<T>) {
-    let value = serde_json::to_string(&item.value).unwrap_or_else(|_| "null".to_string());
-    println!(
-        "{name}={value} source={} reliability={:?}",
-        item.source, item.reliability
-    );
-    if let Some(note) = &item.note {
-        println!("{name}_note={note}");
+fn read_mode() -> Option<String> {
+    mode::read_state().ok().map(|state| state.mode)
+}
+
+fn read_display() -> DisplayStatus {
+    DisplayStatus {
+        overdrive: display::read_state().overdrive_live,
+    }
+}
+
+fn read_sound() -> Option<sound::SoundState> {
+    sound::read_state().ok()
+}
+
+fn print_value_text(prefix: &str, value: &Value) {
+    match value {
+        Value::Object(values) => {
+            for (name, value) in values {
+                let child_prefix = format!("{prefix}.{name}");
+                print_value_text(&child_prefix, value);
+            }
+        }
+        Value::Array(_) => println!(
+            "{prefix}={}",
+            serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
+        ),
+        Value::String(value) => println!("{prefix}={value}"),
+        Value::Number(value) => println!("{prefix}={value}"),
+        Value::Bool(value) => println!("{prefix}={value}"),
+        Value::Null => println!("{prefix}=null"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_serialization_contains_state_only() {
+        let sound = sound::SoundState {
+            preset: "music".to_string(),
+            mode_code: 0,
+        };
+        let fan = fan::FanState {
+            cpu_temperature_c: 60,
+            gpu_temperature_c: 45,
+            cpu_fan_rpm: 2400,
+            gpu_fan_rpm: 2300,
+            mode: "auto".to_string(),
+            custom: None,
+        };
+        let json = serde_json::to_string(&StatusOutput::All(AppStatus {
+            fan: Some(fan),
+            keyboard: KeyboardStatus {
+                lighting: None,
+                backlight_timeout: Some(true),
+                sticky: Some(false),
+                win_menu: Some(true),
+            },
+            mode: Some("default".to_string()),
+            display: DisplayStatus {
+                overdrive: Some(false),
+            },
+            sound: Some(sound),
+        }))
+        .unwrap();
+
+        assert!(json.contains("\"mode\":\"auto\""));
+        assert!(json.contains("\"preset\":\"music\""));
+        assert!(!json.contains("source"));
+        assert!(!json.contains("reliability"));
+        assert!(!json.contains("mode_code"));
+        assert!(!json.contains("query"));
     }
 }

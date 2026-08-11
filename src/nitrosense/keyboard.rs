@@ -47,7 +47,6 @@ pub struct KeyboardState {
     pub brightness: u8,
     pub static_zones: Vec<ZoneState>,
     pub dynamic: Option<DynamicState>,
-    pub profile_xml: String,
 }
 
 #[derive(Debug, Clone)]
@@ -413,10 +412,10 @@ fn system_profile_xml_path() -> Result<PathBuf> {
 
 fn parse_profile_state(path: &Path) -> Result<KeyboardState> {
     let root = read_xml(path)?;
-    parse_profile_state_from_root(&root, path)
+    parse_profile_state_from_root(&root)
 }
 
-fn parse_profile_state_from_root(root: &Element, path: &Path) -> Result<KeyboardState> {
+fn parse_profile_state_from_root(root: &Element) -> Result<KeyboardState> {
     let key = child(&root, "Key")?;
     let lighting = child(&root, "LightingEffects")?;
     let pattern = child(&root, "Pattern")?;
@@ -454,7 +453,6 @@ fn parse_profile_state_from_root(root: &Element, path: &Path) -> Result<Keyboard
         brightness,
         static_zones,
         dynamic,
-        profile_xml: path.display().to_string(),
     })
 }
 
@@ -732,7 +730,6 @@ mod tests {
                 },
             ],
             dynamic: None,
-            profile_xml: String::new(),
         };
 
         let zones = build_static_zones(&args, &current).unwrap();
@@ -781,7 +778,6 @@ mod tests {
                 },
             ],
             dynamic: None,
-            profile_xml: String::new(),
         };
 
         let zones = build_static_zones(&args, &current).unwrap();
@@ -857,7 +853,7 @@ mod tests {
 </ROOT>
 "##;
         let root = Element::parse(xml.as_bytes()).unwrap();
-        let state = parse_profile_state_from_root(&root, Path::new("C:\\dummy\\Main.xml")).unwrap();
+        let state = parse_profile_state_from_root(&root).unwrap();
 
         assert_eq!(state.mode, "dynamic");
         assert_eq!(state.brightness, 1);
@@ -877,7 +873,6 @@ mod tests {
                 color: Some("#00AEEF".to_string()),
                 direction: Some("fromright".to_string()),
             }),
-            profile_xml: String::new(),
         };
 
         let args = KeyboardDynamicArgs {
@@ -912,7 +907,6 @@ mod tests {
                 },
             ],
             dynamic: None,
-            profile_xml: String::new(),
         };
 
         let args = KeyboardDynamicArgs {
@@ -936,7 +930,6 @@ mod tests {
             brightness: 5,
             static_zones: vec![],
             dynamic: None,
-            profile_xml: String::new(),
         };
 
         let args = KeyboardDynamicArgs {
@@ -952,5 +945,4 @@ mod tests {
         assert_eq!(resolved.color.as_deref(), Some(DEFAULT_DYNAMIC_COLOR));
         assert_eq!(resolved.direction, Some(DEFAULT_DYNAMIC_DIRECTION));
     }
-
 }

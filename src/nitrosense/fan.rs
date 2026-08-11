@@ -1,4 +1,4 @@
-use crate::cli::{FanMode, FanSpeedArgs};
+use crate::cli::{FanCustomArgs, FanMode};
 use crate::error::Result;
 use crate::platform::{pipe, registry};
 use anyhow::bail;
@@ -37,32 +37,14 @@ pub struct FanCustomState {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct FanSpeedResult {
-    pub mode: String,
-    pub custom: BTreeMap<FanGroup, FanCustomState>,
-    pub registry_synced: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct HealthValue {
-    pub value: u16,
-    pub trusted: bool,
-    pub query: u32,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct FanState {
-    pub cpu_temperature_c: HealthValue,
-    pub gpu_temperature_c: HealthValue,
-    pub cpu_fan_rpm: HealthValue,
-    pub gpu_fan_rpm: HealthValue,
-    pub persisted_mode: String,
-    pub persisted_mode_code: u32,
-    pub exact_mode_detail: String,
+    pub cpu_temperature_c: u16,
+    pub gpu_temperature_c: u16,
+    pub cpu_fan_rpm: u16,
+    pub gpu_fan_rpm: u16,
+    pub mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_custom: Option<BTreeMap<FanGroup, FanCustomState>>,
-    pub remembered_custom: BTreeMap<FanGroup, FanCustomState>,
-    pub note: String,
+    pub custom: Option<BTreeMap<FanGroup, FanCustomState>>,
 }
 
 pub fn set_mode(mode: FanMode) -> Result<()> {
@@ -77,7 +59,7 @@ pub fn set_mode(mode: FanMode) -> Result<()> {
     Ok(())
 }
 
-pub fn set_speed(args: &FanSpeedArgs) -> Result<FanSpeedResult> {
+pub fn set_custom(args: &FanCustomArgs) -> Result<BTreeMap<FanGroup, FanCustomState>> {
     let mut merged = read_custom_state().unwrap_or_else(|_| default_custom_state());
     let mut updates = BTreeMap::new();
 
@@ -113,11 +95,7 @@ pub fn set_speed(args: &FanSpeedArgs) -> Result<FanSpeedResult> {
     }
 
     sync_custom_registry(&merged, CUSTOM_MODE_CODE)?;
-    Ok(FanSpeedResult {
-        mode: "custom".to_string(),
-        custom: merged,
-        registry_synced: true,
-    })
+    Ok(merged)
 }
 
 pub fn read_state() -> Result<FanState> {
@@ -125,11 +103,10 @@ pub fn read_state() -> Result<FanState> {
     let gpu_temperature_c = read_health(SYSINFO_GPU_TEMP)?;
     let cpu_fan_rpm = read_health(SYSINFO_CPU_FAN_SPEED)?;
     let gpu_fan_rpm = read_health(SYSINFO_GPU_FAN_SPEED)?;
-    let persisted_mode_code = registry::read_hklm_dword(registry::FAN_CONTROL, "CurrentFanMode")?;
-    let persisted_mode = mode_name(persisted_mode_code).to_string();
+    let mode_code = registry::read_hklm_dword(registry::FAN_CONTROL, "CurrentFanMode")?;
+    let mode = mode_name(mode_code).to_string();
     let remembered_custom = read_custom_state()?;
-    let exact_mode_detail = describe_exact_mode(&persisted_mode, &remembered_custom);
-    let active_custom = if persisted_mode == "custom" {
+    let custom = if mode == "custom" {
         Some(remembered_custom.clone())
     } else {
         None
@@ -140,23 +117,15 @@ pub fn read_state() -> Result<FanState> {
         gpu_temperature_c,
         cpu_fan_rpm,
         gpu_fan_rpm,
-        persisted_mode,
-        persisted_mode_code,
-        exact_mode_detail,
-        active_custom,
-        remembered_custom,
-        note: "RPM and temperatures come from live service getters. Exact active fan mode is resolved from HKLM NitroSense FanControl: CurrentFanMode is the authoritative high-level mode, and the per-fan custom fields only describe the active state when CurrentFanMode=custom. This model was re-verified against NitroSense on 2026-05-17.".to_string(),
+        mode,
+        custom,
     })
 }
 
-fn read_health(index: u32) -> Result<HealthValue> {
+fn read_health(index: u32) -> Result<u16> {
     let query = 1 | (index << 8);
     let (_, value) = pipe::service_get_u64(CMD_GET_GAMING_SYSINFO, &[pipe::u32_arg(query)])?;
-    Ok(HealthValue {
-        value: ((value >> 8) & 0xFFFF) as u16,
-        trusted: (value & 0xFF) == 0,
-        query,
-    })
+    Ok(((value >> 8) & 0xFFFF) as u16)
 }
 
 fn read_custom_state() -> Result<BTreeMap<FanGroup, FanCustomState>> {
@@ -257,20 +226,6 @@ fn mode_name(code: u32) -> &'static str {
     }
 }
 
-fn describe_exact_mode(mode: &str, custom: &BTreeMap<FanGroup, FanCustomState>) -> String {
-    match mode {
-        "auto" => "global_auto".to_string(),
-        "max" => "max".to_string(),
-        "custom" if custom[&FanGroup::Cpu].auto && custom[&FanGroup::Gpu].auto => {
-            "custom_all_auto".to_string()
-        }
-        "custom" if custom[&FanGroup::Cpu].auto => "custom_gpu_manual".to_string(),
-        "custom" if custom[&FanGroup::Gpu].auto => "custom_cpu_manual".to_string(),
-        "custom" => "custom_cpu_gpu_manual".to_string(),
-        _ => "unknown".to_string(),
-    }
-}
-
 fn ensure_success(cmd: u16, raw: &[u8], return_code: u32) -> Result<()> {
     if return_code != 0 {
         bail!(
@@ -335,61 +290,5 @@ mod tests {
             ),
         ]);
         assert_eq!(encode_exact_custom_behavior(&state), 0x410009);
-    }
-
-    #[test]
-    fn describes_exact_mode_variants() {
-        let custom_all_auto = BTreeMap::from([
-            (
-                FanGroup::Cpu,
-                FanCustomState {
-                    percent: 50,
-                    auto: true,
-                },
-            ),
-            (
-                FanGroup::Gpu,
-                FanCustomState {
-                    percent: 50,
-                    auto: true,
-                },
-            ),
-        ]);
-        let custom_cpu_manual = BTreeMap::from([
-            (
-                FanGroup::Cpu,
-                FanCustomState {
-                    percent: 70,
-                    auto: false,
-                },
-            ),
-            (
-                FanGroup::Gpu,
-                FanCustomState {
-                    percent: 50,
-                    auto: true,
-                },
-            ),
-        ]);
-        let custom_gpu_manual = BTreeMap::from([
-            (
-                FanGroup::Cpu,
-                FanCustomState {
-                    percent: 70,
-                    auto: true,
-                },
-            ),
-            (
-                FanGroup::Gpu,
-                FanCustomState {
-                    percent: 70,
-                    auto: false,
-                },
-            ),
-        ]);
-
-        assert_eq!(describe_exact_mode("custom", &custom_all_auto), "custom_all_auto");
-        assert_eq!(describe_exact_mode("custom", &custom_cpu_manual), "custom_cpu_manual");
-        assert_eq!(describe_exact_mode("custom", &custom_gpu_manual), "custom_gpu_manual");
     }
 }

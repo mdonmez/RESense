@@ -1,152 +1,174 @@
-# CLI Skeleton
+# CLI Reference
 
-```
+The public CLI uses direct commands for changes and one read-only command for
+state:
+
+```text
 resense
-├── status [--json]
+├── status [fan|keyboard|mode|display|sound]
+│   [--json] [--watch] [--interval <seconds>]
 ├── fan
-│   ├── mode {auto,max}
-│   └── speed [--cpu N] [--gpu N] [--cpu-auto] [--gpu-auto]
+│   ├── auto
+│   ├── max
+│   └── custom [--cpu <percent>|--cpu-auto] [--gpu <percent>|--gpu-auto]
+├── mode {quiet|default|performance} [--skip-whispermode]
 ├── keyboard
-│   ├── brightness {1-5}
-│   ├── static --zone1..4 HEXCOLORS
-│   ├── dynamic {breathing,neon,shifting,wave,zoom} [--speed {1-9}] [--color] [--direction {fromleft,fromright}]
-│   ├── sticky {enable,disable}
-│   └── win-menu {enable,disable}
-├── mode {quiet,default,performance} [--skip-whispermode]
+│   ├── brightness <1-5>
+│   ├── timeout {enable|disable}
+│   ├── static [--zone1 <hex|off>] [--zone2 <hex|off>] [--zone3 <hex|off>] [--zone4 <hex|off>]
+│   ├── dynamic <breathing|neon|shifting|wave|zoom>
+│   │   [--speed <1-9>] [--color <hex>] [--direction <fromleft|fromright>]
+│   ├── sticky {enable|disable}
+│   └── win-menu {enable|disable}
 ├── display
-│   ├── overdrive {enable,disable}
-│   └── backlight-timeout {enable,disable} [--brightness-percent N]
-└── sound [--backend {auto,dts,waves}] preset
+│   └── overdrive {enable|disable}
+└── sound
+    └── <auto|music|movies|voice|strategy|rpg|shooter|custom>
 ```
 
-# CLI Design
+Developer reverse-engineering probes are separate Cargo binaries and are not
+part of the normal `resense --help` command tree.
 
-## `resense status`
+## Reading State
 
-### `resense status [--json]`
+`status` without a target reads all supported state. Supplying one target
+reads only that subsystem:
 
-Read all state.
+```text
+resense status
+resense status fan
+resense status keyboard
+resense status mode
+resense status display
+resense status sound
+```
 
-- `--json` - Print JSON instead of human-readable text, great for scripting and integration
+Use `--json` for a stable state object. Successful text and JSON output report
+what state exists, not how RESense obtained it. They do not include source
+paths, pipe names, query numbers, registry keys, reliability labels, or other
+provenance metadata.
 
-Returns fan (temperatures, RPM, mode), keyboard (lighting, sticky keys, win-menu), mode (operation mode), display (overdrive, backlight timeout), and sound (preset, backend) status.
+```text
+resense status --json
+resense status fan --json
+```
 
----
+`--watch` repeats the selected read. `--interval` sets the polling interval
+in seconds and requires `--watch`; JSON watch output emits one compact object
+per line.
 
-## `resense fan`
+```text
+resense status --watch --interval 2
+resense status fan --json --watch --interval 1
+```
 
-### `resense fan mode {auto,max}`
+Example full JSON shape:
 
-Set global fan mode.
+```json
+{
+  "fan": {
+    "cpu_temperature_c": 60,
+    "gpu_temperature_c": 45,
+    "cpu_fan_rpm": 2400,
+    "gpu_fan_rpm": 2300,
+    "mode": "custom",
+    "custom": {
+      "cpu": { "percent": 70, "auto": false },
+      "gpu": { "percent": 50, "auto": true }
+    }
+  },
+  "keyboard": {
+    "lighting": {},
+    "backlight_timeout": true,
+    "sticky": false,
+    "win_menu": true
+  },
+  "mode": "performance",
+  "display": { "overdrive": true },
+  "sound": { "preset": "music" }
+}
+```
 
-- `auto` - Automatic fan control
-- `max` - Maximum fan speed
+Unavailable subsystem state is represented as `null` or as `null` component
+values. Errors from a write or an invalid command are reported separately on
+stderr.
 
-Updates fan control according to the selected mode. If operation mode is currently `quiet`, RESense blocks manual fan changes and keeps fan mode locked to auto.
+## Fans
 
-### `resense fan speed [--cpu N] [--gpu N] [--cpu-auto] [--gpu-auto]`
+```text
+resense fan auto
+resense fan max
+resense fan custom --cpu 70 --gpu-auto
+resense fan custom --cpu-auto --gpu 80
+```
 
-Set custom fan percentages or per-fan auto. At least one of `--cpu`, `--gpu`, `--cpu-auto`, `--gpu-auto` must be provided. Multiple flags cannot be provided for the same fan.
+`custom` requires at least one CPU/GPU option. A fixed percentage and the
+corresponding `--*-auto` flag cannot be used together. Fan control remains
+blocked while operation mode is `quiet`, matching the existing safety policy.
 
-- `--cpu N` - CPU fan speed percentage (0-100)
-- `--gpu N` - GPU fan speed percentage (0-100)
-- `--cpu-auto` - Set CPU fan to automatic mode
-- `--gpu-auto` - Set GPU fan to automatic mode
+## Mode
 
-Updates fan control according to the selected custom speed or auto setting.
-If operation mode is currently `quiet`, RESense blocks this command and keeps fan mode locked to auto.
+```text
+resense mode quiet
+resense mode default
+resense mode performance
+resense mode performance --skip-whispermode
+```
 
----
+Operation mode writes retain the existing WhisperMode integration unless
+`--skip-whispermode` is supplied.
 
-## `resense keyboard`
+## Keyboard
 
-### `resense keyboard brightness {1-5}`
+```text
+resense keyboard brightness 5
+resense keyboard timeout disable
+resense keyboard static --zone1 FF0000 --zone2 off --zone3 00FF00 --zone4 off
+resense keyboard dynamic wave --speed 5 --color 00FFFF --direction fromleft
+resense keyboard sticky enable
+resense keyboard win-menu disable
+```
 
-Set keyboard brightness level.
+Static lighting preserves the current brightness and unspecified zones.
+Dynamic lighting preserves current effect values when possible and falls back
+to validated defaults. `--color` is unsupported for `neon`; `--direction` is
+only used by `wave` and `shifting`.
 
-- `level` - Brightness level from 1 (disabled) to 5 (brightest)
+## Display
 
-Updates keyboard brightness according to the selected level.
+```text
+resense display overdrive enable
+resense display overdrive disable
+```
 
-### `resense keyboard static --zone1..4 HEXCOLORS`
+Keyboard backlight timeout is intentionally under `keyboard timeout`; it is
+not a display command.
 
-Set 4-zone static lighting. Each zone accepts a 6-digit hex color (e.g., `FF0000` for red) or `off`. At least one zone must be provided.
+## Sound
 
-- `--zone1 HEXCOLOR` - Zone 1 color
-- `--zone2 HEXCOLOR` - Zone 2 color
-- `--zone3 HEXCOLOR` - Zone 3 color
-- `--zone4 HEXCOLOR` - Zone 4 color
+```text
+resense sound auto
+resense sound music
+resense sound movies
+resense sound voice
+resense sound strategy
+resense sound rpg
+resense sound shooter
+resense sound custom
+```
 
-Updates static keyboard lighting according to the selected zone colors. This command preserves the current keyboard brightness.
+The public command uses the validated DTS path automatically. The supported
+outputs are the internal speakers and the validated 3.5 mm Realtek output.
+Bluetooth and other non-DTS paths remain unsupported.
 
-### `resense keyboard dynamic {breathing,neon,shifting,wave,zoom} [--speed {1-9}] [--color HEXCOLOR] [--direction {fromleft,fromright}]`
+## Migration
 
-Set dynamic keyboard lighting effect.
+This is a clean command move. The removed forms are not aliases:
 
-- `mode` - Dynamic effect: `breathing`, `neon`, `shifting`, `wave`, `zoom`
-- `--speed {1-9}` - Effect speed (optional, 1=slowest, 9=fastest)
-
-Updates dynamic keyboard lighting according to the selected effect while preserving the current keyboard brightness. Missing dynamic settings are resolved intelligently from the current lighting state: RESense reuses the current dynamic speed, direction, and color when possible, otherwise borrows a usable color from the current static zones, and only falls back to built-in defaults when no better state exists. `--color` is ignored by `neon`, and `--direction` is only used by `wave` and `shifting`. Providing unsupported flags for a mode still raises an error.
-
-### `resense keyboard sticky {enable,disable}`
-
-Set or read Sticky Keys.
-
-- `enable` - Enable Sticky Keys
-- `disable` - Disable Sticky Keys
-
-Updates Sticky Keys according to the selected setting.
-
-### `resense keyboard win-menu {enable,disable}`
-
-Set or read Windows/Menu key lock.
-
-- `enable` - Lock Windows and Menu keys
-- `disable` - Unlock Windows and Menu keys
-
-Updates the Windows/Menu key lock according to the selected setting.
-
----
-
-### `resense mode {quiet,default,performance}`
-
-Set operation mode.
-
-- `quiet` - Quiet mode
-- `default` - Balanced default mode
-- `performance` - Highest performance mode
-
-Updates the operation mode according to the selected setting.
-Setting `quiet` immediately forces fan mode to `auto`, re-applies that auto state after the mode change, and keeps fan control blocked while quiet mode remains active. Unlike the original NitroSense UI, RESense does not restrict operation mode changes based on AC or battery state.
-
----
-
-### `resense display overdrive {enable,disable}`
-
-Set or read LCD Overdrive.
-
-- `enable` - Enable LCD Overdrive
-- `disable` - Disable LCD Overdrive
-
-Updates LCD Overdrive according to the selected setting.
-
----
-
-### `resense display backlight-timeout {enable,disable}`
-
-Set or read keyboard backlight timeout.
-
-- `enable` - Enable backlight timeout
-- `disable` - Disable backlight timeout
-
-Updates keyboard backlight timeout according to the selected setting.
-
----
-
-### `resense sound [--backend {auto,dts,waves}] preset`
-
-Set or read sound preset.
-
-- `preset` - DTS presets: `music`, `movies`, `voice`, `strategy`, `rpg`, `shooter`, `custom`, `auto`
-
-Updates the sound preset according to the selected preset and backend. Not available if headphones are connected.
+```text
+resense get fan                         # removed
+resense fan mode auto                   # use resense fan auto
+resense fan speed --cpu 70              # use resense fan custom --cpu 70
+resense keyboard backlight-timeout ...  # use resense keyboard timeout ...
+resense sound --backend dts music       # use resense sound music
+```

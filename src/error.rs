@@ -1,4 +1,4 @@
-use crate::cli::{FanSpeedArgs, KeyboardDynamicArgs, KeyboardDynamicMode, KeyboardStaticArgs};
+use crate::cli::{FanCustomArgs, KeyboardDynamicArgs, KeyboardDynamicMode, KeyboardStaticArgs};
 use anyhow::{Result as AnyhowResult, bail};
 
 pub type Result<T> = AnyhowResult<T>;
@@ -13,7 +13,7 @@ pub mod validate {
         Ok(())
     }
 
-    pub fn fan_speed_args(args: &FanSpeedArgs) -> Result<()> {
+    pub fn fan_custom_args(args: &FanCustomArgs) -> Result<()> {
         if args.cpu.is_none() && args.gpu.is_none() && !args.cpu_auto && !args.gpu_auto {
             bail!("provide at least one of --cpu, --gpu, --cpu-auto, or --gpu-auto");
         }

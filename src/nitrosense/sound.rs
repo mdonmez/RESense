@@ -1,4 +1,4 @@
-use crate::cli::{SoundBackend, SoundPreset};
+use crate::cli::SoundPreset;
 use crate::error::Result;
 use crate::platform::{pipe, registry, session};
 use anyhow::bail;
@@ -11,19 +11,17 @@ const ADMIN_GET_REPLY_SIZE: usize = 9;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SoundState {
-    pub backend: String,
-    pub dts_supported: bool,
-    pub mode: String,
+    pub preset: String,
+    #[serde(skip_serializing)]
     pub mode_code: i32,
-    pub reliability: String,
 }
 
-pub fn set_preset(backend: SoundBackend, preset: SoundPreset) -> Result<()> {
-    let resolved = resolve_supported_backend(backend)?;
+pub fn set_preset(preset: SoundPreset) -> Result<()> {
+    ensure_dts_supported()?;
     let mode_code = preset_code(preset);
     send_admin_set(CMD_SET_DTS_SOUND_MODE, mode_code)?;
     thread::sleep(Duration::from_millis(100));
-    let state = read_backend(resolved)?;
+    let state = read_state()?;
     if state.mode_code != mode_code as i32 {
         bail!(
             "sound preset verification failed: expected {mode_code}, got {}",
@@ -34,32 +32,21 @@ pub fn set_preset(backend: SoundBackend, preset: SoundPreset) -> Result<()> {
 }
 
 pub fn read_state() -> Result<SoundState> {
-    read_backend(resolve_supported_backend(SoundBackend::Auto)?)
-}
-
-fn read_backend(backend: SoundBackend) -> Result<SoundState> {
+    ensure_dts_supported()?;
     let mode_code = send_admin_get(CMD_GET_DTS_SOUND_MODE)?;
-    let reliability = if mode_code == 9 {
-        "unavailable"
-    } else {
-        "live"
-    };
     Ok(SoundState {
-        backend: backend.to_string(),
-        dts_supported: dts_supported(),
-        mode: preset_name(backend, mode_code).to_string(),
+        preset: preset_name(mode_code).to_string(),
         mode_code,
-        reliability: reliability.to_string(),
     })
 }
 
-fn resolve_supported_backend(backend: SoundBackend) -> Result<SoundBackend> {
-    match backend {
-        SoundBackend::Auto | SoundBackend::Dts if dts_supported() => Ok(SoundBackend::Dts),
-        SoundBackend::Auto | SoundBackend::Dts => bail!(
+fn ensure_dts_supported() -> Result<()> {
+    if !dts_supported() {
+        bail!(
             "the current default output is not on the validated DTS path; supported outputs are internal speakers and validated 3.5 mm Realtek output"
-        ),
+        );
     }
+    Ok(())
 }
 
 fn dts_supported() -> bool {
@@ -109,21 +96,18 @@ fn preset_code(preset: SoundPreset) -> u32 {
     }
 }
 
-fn preset_name(backend: SoundBackend, code: i32) -> &'static str {
-    match backend {
-        SoundBackend::Dts => match code {
-            0 => "music",
-            1 => "movies",
-            2 => "voice",
-            3 => "strategy",
-            4 => "rpg",
-            5 => "shooter",
-            6 => "custom",
-            9 => "unavailable",
-            10 => "auto",
-            _ => "unknown",
-        },
-        SoundBackend::Auto => "unknown",
+fn preset_name(code: i32) -> &'static str {
+    match code {
+        0 => "music",
+        1 => "movies",
+        2 => "voice",
+        3 => "strategy",
+        4 => "rpg",
+        5 => "shooter",
+        6 => "custom",
+        9 => "unavailable",
+        10 => "auto",
+        _ => "unknown",
     }
 }
 
