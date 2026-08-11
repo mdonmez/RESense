@@ -1,5 +1,4 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use serde::Serialize;
 use std::fmt;
 
 #[derive(Parser, Debug)]
@@ -165,13 +164,6 @@ pub struct ToggleArgs {
     pub state: ToggleState,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub enum FanMode {
-    Auto,
-    Max,
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum StatusTarget {
     Fan,
@@ -181,8 +173,7 @@ pub enum StatusTarget {
     Sound,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum KeyboardDynamicMode {
     Breathing,
     Neon,
@@ -191,30 +182,26 @@ pub enum KeyboardDynamicMode {
     Zoom,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum Direction {
     FromLeft,
     FromRight,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum OperatingMode {
     Quiet,
     Default,
     Performance,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum ToggleState {
     Enable,
     Disable,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 pub enum SoundPreset {
     Music,
     Movies,
@@ -242,7 +229,6 @@ macro_rules! display_value {
     };
 }
 
-display_value!(FanMode);
 display_value!(KeyboardDynamicMode);
 display_value!(Direction);
 display_value!(OperatingMode);
