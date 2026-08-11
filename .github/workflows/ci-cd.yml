@@ -121,10 +121,18 @@ jobs:
             throw "Tag '$($env:GITHUB_REF_NAME)' does not match expected tag '$expectedTag'."
           }
 
-          gh release view $env:GITHUB_REF_NAME --json tagName --jq .tagName 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseListJson = gh release list --limit 1000 --json tagName
+          $releaseListExitCode = $LASTEXITCODE
+          if ($releaseListExitCode -ne 0) {
+            throw "Unable to query existing GitHub Releases (exit code $releaseListExitCode)."
+          }
+
+          $releaseList = @($releaseListJson | ConvertFrom-Json)
+          if ($releaseList.tagName -contains $env:GITHUB_REF_NAME) {
             throw "A GitHub Release already exists for '$env:GITHUB_REF_NAME'."
           }
+
+          $LASTEXITCODE = 0
 
       - name: Package release assets
         id: package
