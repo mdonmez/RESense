@@ -1,0 +1,85 @@
+#requires -Version 5.1
+
+$ErrorActionPreference = "Stop"
+
+$Repository = "mdonmez/RESense"
+$Version = "__VERSION__"
+$ReleaseTag = "__RELEASE_TAG__"
+$PackageName = "resense-$Version-windows-x86_64.zip"
+$InstallPath = Join-Path $env:LOCALAPPDATA "Programs\RESense"
+$InstallParent = Split-Path -Parent $InstallPath
+$TemporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("resense-install-" + [guid]::NewGuid().ToString("N"))
+$DownloadRoot = Join-Path $TemporaryRoot "download"
+$ExtractRoot = Join-Path $TemporaryRoot "extract"
+$StagePath = Join-Path $TemporaryRoot "stage"
+$BaseUrl = "https://github.com/$Repository/releases/download/$ReleaseTag"
+
+try {
+    $running = @(Get-Process -Name "resense" -ErrorAction SilentlyContinue)
+    if ($running.Count -gt 0) {
+        throw "Close any running resense.exe process before updating RESense."
+    }
+
+    New-Item -ItemType Directory -Force -Path $DownloadRoot, $ExtractRoot, $StagePath | Out-Null
+
+    $packagePath = Join-Path $DownloadRoot $PackageName
+    $checksumsPath = Join-Path $DownloadRoot "SHA256SUMS.txt"
+    Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/$PackageName" -OutFile $packagePath
+    Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
+
+    $checksumMatches = @(Get-Content -LiteralPath $checksumsPath | Where-Object {
+        $parts = $_.Trim() -split "\s+", 2
+        $parts.Count -eq 2 -and $parts[1].Trim() -eq $PackageName
+    })
+    if ($checksumMatches.Count -ne 1) {
+        throw "SHA-256 entry for '$PackageName' was not found or was ambiguous."
+    }
+
+    $expectedHash = (($checksumMatches[0].Trim() -split "\s+", 2)[0]).ToUpperInvariant()
+    $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHash) {
+        throw "SHA-256 verification failed for '$PackageName'."
+    }
+
+    Expand-Archive -LiteralPath $packagePath -DestinationPath $ExtractRoot -Force
+    $executablePath = Join-Path $ExtractRoot "resense.exe"
+    if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
+        throw "The release archive does not contain resense.exe."
+    }
+
+    Copy-Item -Path (Join-Path $ExtractRoot "*") -Destination $StagePath -Recurse -Force
+    New-Item -ItemType Directory -Force -Path $InstallParent | Out-Null
+    if (Test-Path -LiteralPath $InstallPath) {
+        Remove-Item -LiteralPath $InstallPath -Recurse -Force
+    }
+    Move-Item -LiteralPath $StagePath -Destination $InstallPath
+
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $userEntries = @()
+    if (-not [string]::IsNullOrWhiteSpace($userPath)) {
+        $userEntries = @($userPath -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+    $normalizedInstallPath = [System.IO.Path]::GetFullPath($InstallPath).TrimEnd("\")
+    $pathAlreadyPresent = @($userEntries | Where-Object {
+        [string]::Equals($_.Trim().TrimEnd("\"), $normalizedInstallPath, [StringComparison]::OrdinalIgnoreCase)
+    }).Count -gt 0
+    if (-not $pathAlreadyPresent) {
+        [Environment]::SetEnvironmentVariable("Path", (($userEntries + $InstallPath) -join ";"), "User")
+    }
+
+    $currentEntries = @($env:Path -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $currentPathPresent = @($currentEntries | Where-Object {
+        [string]::Equals($_.Trim().TrimEnd("\"), $normalizedInstallPath, [StringComparison]::OrdinalIgnoreCase)
+    }).Count -gt 0
+    if (-not $currentPathPresent) {
+        $env:Path = (($currentEntries + $InstallPath) -join ";")
+    }
+
+    Write-Output "RESense $Version installed at $InstallPath."
+    Write-Output "Open a new terminal, or run 'resense --help' in this session."
+}
+finally {
+    if (Test-Path -LiteralPath $TemporaryRoot) {
+        Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}

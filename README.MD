@@ -23,6 +23,12 @@ resense sound <auto|music|movies|voice|strategy|rpg|shooter|custom>
 
 See [docs/cli.md](docs/cli.md) for commands and the stable JSON contract. The architecture and ownership boundaries are in [docs/architecture.md](docs/architecture.md). Current status and future work are tracked in [docs/roadmap.md](docs/roadmap.md).
 
+## Installation
+
+Latest release installation and removal instructions are in
+[docs/release.md](docs/release.md). The release workflow publishes Windows x64
+artifacts from explicit `vX.Y.Z` tags.
+
 ## Supported Audio
 
 The DTS path is validated for internal speakers and wired 3.5 mm Realtek headphones. Bluetooth and other non-DTS paths are intentionally unsupported, matching NitroSense's own surface on this machine.
