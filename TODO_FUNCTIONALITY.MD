@@ -249,11 +249,11 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
 
 # Sound
 
-- [x] Narrow the currently supported sound surface to the validated DTS/internal-speaker path until a supported wired-headphone path is decoded.
+- [x] Define the supported sound surface as the validated DTS path for internal speakers and 3.5 mm Realtek output.
   Current conclusion:
-  - RESense now treats sound support as DTS-only
+  - RESense now treats sound support as the validated DTS path
+  - the same DTS command surface works for internal speakers and the validated wired 3.5 mm Realtek output
   - Bluetooth headphone output is not part of the supported sound surface
-  - Waves validation is deferred until a supported `3.5 mm` device is available
 - [x] Finish the supported DTS mode map without leaving user-visible `unknown` states in the supported surface.
   Verified on 2026-05-17 for the DTS-backed `Acer TrueHarmony` surface with headphones disconnected:
   - `Otomatik` -> `auto` / `10`
@@ -264,9 +264,9 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - `RPG` -> `rpg` / `4`
   - `Nişancı` -> `shooter` / `5`
   - `Özel Ses` -> `custom` / `6`
-- [x] Verify whether backend auto-resolution is always correct and whether registry support flags are sufficient for the supported sound path.
+- [x] Verify whether backend auto-resolution is correct and whether registry support flags are sufficient for the supported DTS path.
   Current conclusion:
-  - `DTS_Audio_Support` is sufficient for the currently supported DTS/internal-speaker path
+  - `DTS_Audio_Support` is sufficient for the validated DTS path on internal speakers and wired 3.5 mm Realtek output
   - when the default output changed to Bluetooth headphones, the backend no longer stayed on the validated DTS path
   - that non-DTS state is now treated as unsupported rather than as an active supported fallback
 - [x] Verify whether headphones or other device state alter sound command behavior in ways the CLI must report explicitly.
@@ -279,7 +279,12 @@ No major CLI redesign, UX cleanup, or new features should outrank this file unti
   - `resense sound music` -> NitroSense `Müzik`
   - `resense sound auto` -> NitroSense `Otomatik`
   - `resense sound shooter` -> NitroSense `Nişancı`
-- [ ] Validate the supported wired-headphone Waves path later with a real `3.5 mm` device and document its exact preset surface.
+- [x] Validate the wired `3.5 mm` sound path and document its exact preset surface.
+  Verified on 2026-08-11:
+  - Realtek wired headphones exposed the full NitroSense `Acer TrueHarmony` preset surface.
+  - RESense read DTS `auto` / code `10`.
+  - `resense sound movies` changed NitroSense to `Film` / code `1` and kept audio working.
+  - `resense sound shooter` changed NitroSense to `Nişancı` / code `5` and kept audio working.
 
 # Service, Pipes, and Sessions
 

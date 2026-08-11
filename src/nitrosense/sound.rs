@@ -57,7 +57,7 @@ fn resolve_supported_backend(backend: SoundBackend) -> Result<SoundBackend> {
     match backend {
         SoundBackend::Auto | SoundBackend::Dts if dts_supported() => Ok(SoundBackend::Dts),
         SoundBackend::Auto | SoundBackend::Dts => bail!(
-            "the current default output is not on the validated DTS path; only the internal-speaker DTS sound path is supported right now"
+            "the current default output is not on the validated DTS path; supported outputs are internal speakers and validated 3.5 mm Realtek output"
         ),
     }
 }

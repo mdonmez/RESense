@@ -10,13 +10,6 @@ Rules:
 
 ## Open
 
-### Deferred Hardware
-
-- Wired `3.5 mm` Waves sound path
-  - status: deferred
-  - reason: no working supported wired device was available during validation
-  - impact: DTS/internal-speaker path is supported; wired headset path is not yet in the supported surface
-
 ### Wider Undecoded Query Surface
 
 - Exact meaning of successful `cmd 20` queries outside the supported keyboard backlight-timeout decode
@@ -55,3 +48,11 @@ Rules:
 - resolved conclusion:
   - `keyboard sticky` is session-scoped
   - DTS sound and WhisperMode are effectively shared/global on this machine
+
+### Wired 3.5 mm Sound Path
+
+- old assumption: a wired headset might require a separate Waves backend
+- resolved conclusion:
+  - the validated Realtek 3.5 mm output exposes the full NitroSense TrueHarmony surface
+  - RESense reads and writes it through the same DTS admin commands as internal speakers
+  - Bluetooth/non-DTS output remains outside the supported surface

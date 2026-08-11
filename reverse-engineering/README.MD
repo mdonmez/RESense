@@ -103,7 +103,7 @@ Use one NitroSense UI action per experiment.
   - in discrete-only mode / some NVIDIA states, WhisperMode may appear unavailable or inactive
   - in hybrid mode with NVIDIA App exposing WhisperMode, `resense mode quiet` changed WhisperMode from `Off` to an active `60 FPS` setting
   - WhisperMode therefore remains a real but environment-dependent side effect, not the primary source of truth for operation mode state
-- DTS-backed sound mapping is now validated on this machine with headphones disconnected:
+- DTS-backed sound mapping is now validated on this machine for internal speakers and wired 3.5 mm Realtek output:
   - NitroSense `Acer TrueHarmony` matched the DTS backend
   - validated preset codes are:
     - `0=music`
@@ -114,17 +114,22 @@ Use one NitroSense UI action per experiment.
     - `5=shooter`
     - `6=custom`
     - `10=auto`
-  - verified CLI writes:
+  - verified CLI writes on the internal-speaker path:
     - `resense sound music` -> NitroSense `Müzik`
     - `resense sound auto` -> NitroSense `Otomatik`
     - `resense sound shooter` -> NitroSense `Nişancı`
-  - RESense now treats this DTS/internal-speaker path as the only supported sound surface
+  - verified wired 3.5 mm writes on 2026-08-11:
+    - `resense sound movies` -> NitroSense `Film`, live code `1`
+    - `resense sound shooter` -> NitroSense `Nişancı`, live code `5`
+    - audio remained routed through the wired headphones after both writes
+  - the wired 3.5 mm path uses the same DTS command surface as internal speakers
+  - RESense treats this validated DTS path as the supported sound surface
 - Bluetooth headphone output changed the NitroSense menu to a different preset surface and no longer stayed on the validated DTS path:
   - RESense observed `backend=waves` and `dts_supported=false`
   - NitroSense clicks and RESense writes both left the live preset pinned at `music`
   - NitroSense indicates this surface is for internal speakers and `3.5 mm` audio devices
   - RESense therefore now treats Bluetooth/non-DTS output as unsupported instead of leaving an active Waves fallback in the supported code path
-  - remaining sound gap is later validation of the wired `3.5 mm` Waves path
+  - no wired sound gap remains for the validated DTS path; Bluetooth/non-DTS output remains unsupported
 - Multi-session admin-agent behavior is now partly validated:
   - with two active Windows sessions, `PredatorSense_admin_agent_4` and `PredatorSense_admin_agent_5` can both exist at once
   - direct sticky-key writes to each pipe affected different user sessions

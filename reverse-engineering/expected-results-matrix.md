@@ -67,4 +67,4 @@ Conventions:
 - Keyboard state remains XML-backed by design on the supported surface.
 - Sticky keys are current-session only.
 - DTS sound and WhisperMode are effectively shared/global on this machine even though they are transported through session admin pipes.
-- The wired `3.5 mm` Waves path is intentionally outside this matrix until it is validated.
+- The wired `3.5 mm` Realtek path is included in the validated DTS surface. It uses the same admin getter/setter codes as internal speakers. Bluetooth/non-DTS output remains outside the supported matrix.

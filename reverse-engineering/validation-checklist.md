@@ -73,7 +73,7 @@ Use this checklist whenever a supported feature changes.
 
 ### Sound
 
-- on the supported DTS/internal-speaker path, verify:
+- on the supported DTS path, verify with internal speakers and, when available, wired 3.5 mm Realtek output:
   - `sound auto`
   - `sound music`
   - `sound shooter`
@@ -82,9 +82,8 @@ Use this checklist whenever a supported feature changes.
 ## Known Unsupported / Deferred Areas
 
 - independent live keyboard-state getter
-- wired `3.5 mm` Waves sound path
 - exact meaning of every successful `cmd 20` / `cmd 34` query outside supported decodes
-- full multi-session admin-agent behavior
+- any Bluetooth/non-DTS sound path
 
 ## Failure-Mode Notes
 

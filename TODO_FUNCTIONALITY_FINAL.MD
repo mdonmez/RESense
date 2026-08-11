@@ -5,7 +5,7 @@ This file tracks the remaining functionality-first work after the main subsystem
 Scope rules:
 
 - Finish correctness and compatibility work before CLI polish, output redesign, UX cleanup, or profile features.
-- Exclude the deferred wired `3.5 mm` Waves path until real hardware is available.
+- Treat the validated DTS path for internal speakers and 3.5 mm Realtek output as supported; Bluetooth/non-DTS output remains unsupported.
 - Prefer exact source-of-truth documentation and repeatable validation over speculative behavior.
 
 ## Current Baseline
@@ -14,8 +14,8 @@ Scope rules:
 - Keyboard: complete for the supported XML-backed surface
 - Display: complete for LCD overdrive
 - Operation mode: complete for the supported surface
-- Sound: complete for the DTS/internal-speaker path
-- Deferred hardware path: wired `3.5 mm` Waves sound validation
+- Sound: complete for the validated DTS path (internal speakers and 3.5 mm Realtek output)
+- Deferred hardware path: none for the validated wired/DTS surface; Bluetooth/non-DTS output remains unsupported
 
 ## Remaining Functionality Work
 
@@ -70,10 +70,16 @@ Scope rules:
   - expected NitroSense-visible result
 - [x] Keep a dedicated unresolved-assumptions log and explicitly move items out of it only when validated.
 
-### 3. Deferred Hardware Validation
+### 3. Wired 3.5 mm Validation (Completed)
 
-- [ ] Validate the wired `3.5 mm` Waves sound path later with a real supported device.
+- [x] Validate the wired `3.5 mm` sound path with a real supported device.
+  Verified on 2026-08-11:
+  - Realtek wired headphones exposed the full NitroSense `Acer TrueHarmony` preset surface.
+  - RESense read `backend=dts`, `DTS_Audio_Support=1`, and `auto` / code `10`.
+  - RESense `sound movies` changed NitroSense to `Film` / code `1`.
+  - RESense `sound shooter` changed NitroSense to `Nişancı` / code `5`.
+  - Audio continued through the wired headphones after both writes.
 
 ## Recommended Order
 
-1. Deferred wired `3.5 mm` Waves validation when hardware is available
+1. Functionality track complete for the validated supported surface; Bluetooth/non-DTS audio remains explicitly unsupported

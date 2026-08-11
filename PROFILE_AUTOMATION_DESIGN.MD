@@ -196,11 +196,10 @@ Profiles should include only validated supported state:
 - mode
 - keyboard
 - display overdrive
-- sound on the supported DTS/internal-speaker path
+- sound on the supported DTS path for internal speakers and validated wired 3.5 mm Realtek output
 
 Not included for now:
 
-- wired `3.5 mm` Waves path
 - unsupported Bluetooth sound state
 - anything outside the supported validated surface
 
