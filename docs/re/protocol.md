@@ -233,7 +233,7 @@ Payload:
 
 Color adjustment source:
 
-- `references\NitroSense\NitroSense\HW_Support.ini`
+- installed NitroSense `C:\ProgramData\OEM\NitroSense\HW_Support.ini`
 - section `[ZoneColorAdjust]`
 
 ### `cmd 29` service set

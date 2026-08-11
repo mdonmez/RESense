@@ -1,4 +1,4 @@
-# RESense Reverse Engineering Notes
+# RESense Reverse-Engineering Notes
 
 ## Current Context
 
@@ -12,11 +12,10 @@ As of 2026-05-15, after KB5089549, NitroSense is accessible again on this machin
 
 ## Working Docs
 
-- `source-of-truth-matrix.md` - supported feature-by-feature read/write/source matrix.
-- `pipe-command-catalog.md` - currently used service/admin command catalog with payload and reply notes.
-- `validation-checklist.md` - repeatable one-setting-at-a-time re-validation workflow.
-- `expected-results-matrix.md` - supported command-by-command expected writes, readback, and NitroSense-visible outcomes.
-- `unresolved-assumptions.md` - explicit open/deferred assumptions log.
+- `state.md` - feature-by-feature source-of-truth matrix and assumption log.
+- `protocol.md` - currently used service/admin command catalog with payload and reply notes.
+- `validation.md` - command-level expected outcomes and repeatable re-validation workflow.
+- `linux-port.md` - preserved Linux backend research and validation leads.
 
 ## Live Comparison Workflow
 
