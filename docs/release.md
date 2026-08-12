@@ -34,14 +34,26 @@ new version. Existing tags and releases must never be moved or overwritten.
 Latest installation:
 
 ```powershell
+irm git.new/resense | iex
+```
+
+or
+
+```powershell
 irm https://github.com/mdonmez/RESense/releases/latest/download/install.ps1 | iex
 ```
+
+git.new/resense URL will redirect to the explicit latest release, it is created using [Dub](https://dub.co/) for making installation command compacter.
+
+---
 
 Pinned installation:
 
 ```powershell
 irm https://github.com/mdonmez/RESense/releases/download/v0.1.0/install.ps1 | iex
 ```
+
+---
 
 Latest uninstall:
 
