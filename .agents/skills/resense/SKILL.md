@@ -1,53 +1,66 @@
 ---
 name: resense
-description: >
-  Control Acer Nitro AN515-58 PredatorSense hardware via the RESense CLI:
-  fan control, keyboard lighting, operation mode, display overdrive, sound
-  presets, and full system status. Use this skill whenever the user mentions
-  RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control,
-  keyboard lighting, or laptop operation modes.
+description: Inspect and control supported Acer Nitro hardware through the RESense CLI: fans, operation modes, keyboard lighting, display overdrive, DTS sound, and system status. Use this skill whenever the user mentions RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control, keyboard lighting, or laptop operation modes.
 ---
 
 # RESense
 
-RESense controls Acer Nitro AN515-58 hardware through the validated
-PredatorSense/NitroSense service interface.
+Use RESense for supported Acer Nitro hardware control. It requires the Acer service and the default model check. Do not bypass that check unless the user explicitly asks for `--dangerously-allow-any-model`.
 
-## Prerequisites
+## Start And Updates
 
-- `resense.exe` must be on `PATH` or in the current directory.
-- The default model check requires an Acer Nitro AN515-58.
-- The Acer service and required Windows session context must be available.
-- Use `--dangerously-allow-any-model` only when intentionally bypassing the
-  model check.
+Before invoking any other RESense command in a task, run:
 
-## Public CLI
+```powershell
+resense --version
+```
 
-Use `status` for reads. It accepts no target for the full state or one target
-(`fan`, `keyboard`, `mode`, `display`, or `sound`) for a focused read.
+Record the installed version and any available update, but do not interrupt the user's request to discuss the update. Complete the requested RESense work first. After the work is complete, if an update was reported, tell the user that it is available and ask whether to run:
+
+```powershell
+resense update
+```
+
+Never update without the user's consent. If the user agrees, run the update after the requested work and then run `resense --version` again before continuing. If the update check is unavailable but the installed version is reported, complete the requested work and then state that the check could not be completed.
+
+If `resense` is not available, offer the latest user-scoped installation:
+
+```powershell
+irm git.new/resense | iex
+```
+
+Use a new terminal if the current shell has not refreshed its PATH.
+
+## Command Discovery
+
+Use `--help` whenever a command, subcommand, argument, or option is unclear. Check the narrowest relevant level instead of guessing:
+
+```powershell
+resense --help
+resense fan --help
+resense keyboard dynamic --help
+```
+
+Prefer the live help output over remembered syntax when the installed version or requested operation is unfamiliar.
+
+## Read State
+
+Use `status` for reads. Omit the target for the complete state or select one target for a focused read.
 
 ```powershell
 resense status
 resense status fan
+resense status keyboard
+resense status mode
+resense status display
+resense status sound
 resense status --json
-resense status fan --json
 resense status --watch --interval 2
 ```
 
-Successful text and JSON output report state only.
+After a mutation, use the command's verified output or a focused status read to confirm the resulting state. Surface operational errors instead of guessing or substituting fallback values.
 
-### Version and updates
-
-```powershell
-resense --version
-resense update
-```
-
-`--version` reports the installed version and checks the latest stable release.
-`update` installs a newer release when one is available without changing
-hardware settings.
-
-### Fans
+## Fans
 
 ```powershell
 resense fan auto
@@ -55,11 +68,9 @@ resense fan max
 resense fan custom --cpu 70 --gpu-auto
 ```
 
-`custom` accepts `--cpu <0-100>`, `--gpu <0-100>`, `--cpu-auto`, and
-`--gpu-auto`. At least one option is required, and a fixed percentage cannot
-be combined with the corresponding automatic flag.
+`custom` accepts `--cpu <0-100>`, `--gpu <0-100>`, `--cpu-auto`, and `--gpu-auto`. At least one fan option is required, and a fan cannot receive both a percentage and its automatic flag.
 
-### Operation mode
+## Operation Mode
 
 ```powershell
 resense mode quiet
@@ -68,7 +79,7 @@ resense mode performance
 resense mode performance --skip-whispermode
 ```
 
-### Keyboard
+## Keyboard
 
 ```powershell
 resense keyboard brightness 5
@@ -79,16 +90,16 @@ resense keyboard sticky enable
 resense keyboard win-menu disable
 ```
 
-### Display
+Keyboard lighting supports four static zones and dynamic effects including `breathing`, `neon`, `shifting`, `wave`, and `zoom`. Use `keyboard timeout` for the keyboard backlight timeout.
+
+## Display
 
 ```powershell
 resense display overdrive enable
 resense display overdrive disable
 ```
 
-Keyboard backlight timeout is under `keyboard timeout`, not `display`.
-
-### Sound
+## Sound
 
 ```powershell
 resense sound auto
@@ -101,10 +112,19 @@ resense sound shooter
 resense sound custom
 ```
 
-The public sound command uses the DTS path automatically. Supported outputs
-are the internal speakers and wired 3.5 mm Realtek output.
+Sound commands use the supported DTS path. The validated outputs are the internal speakers and wired 3.5 mm Realtek audio. Report unsupported output paths clearly instead of claiming that a preset was applied.
 
-## Developer Probes
+## Examples
 
-Reverse-engineering probes are separate Cargo binaries and are intentionally
-not part of the normal `resense --help` command tree.
+Translate the user's intent into the smallest matching command, then verify the result when the operation changes hardware state.
+
+```text
+"Make my laptop quieter"        -> resense mode quiet
+"I'm doing heavy work"          -> resense mode performance
+"Reduce my keyboard brightness" -> resense keyboard brightness 2
+"Cool down my laptop"           -> resense fan custom --cpu 80 --gpu 80
+"Is my laptop overheating?"     -> resense status
+"Set the keyboard to red"       -> resense keyboard static --zone1 FF0000
+"Turn on LCD overdrive"         -> resense display overdrive enable
+"Set the sound for music"       -> resense sound music
+```

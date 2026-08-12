@@ -1,8 +1,6 @@
 # Device Protocol Reference
 
-Maintainer reference for the vendor command surface used by the current device
-layer. These details are implementation data and are not part of the public
-CLI or status output.
+Maintainer reference for the vendor command surface used by the current device layer. These details are implementation data and are not part of the public CLI or status output.
 
 ## Transport
 
@@ -15,9 +13,7 @@ Each request contains:
 2. A `u8` argument count.
 3. For each argument, a `u32` byte length followed by the argument bytes.
 
-The current adapter expects nine-byte setter replies, nine-byte `u32` getter
-replies, and thirteen-byte `u64` getter replies. It validates each frame and
-decodes the result before returning it to the device layer.
+The current adapter expects nine-byte setter replies, nine-byte `u32` getter replies, and thirteen-byte `u64` getter replies. It validates each frame and decodes the result before returning it to the device layer.
 
 ## Commands
 
@@ -64,8 +60,7 @@ Command `13` uses a query value of `1 | (index << 8)`:
 - Index `6`: GPU fan RPM.
 - Index `10`: GPU temperature.
 
-The low byte is the vendor status and the next sixteen bits contain the
-reading.
+The low byte is the vendor status and the next sixteen bits contain the reading.
 
 ### DTS Sound
 
@@ -90,8 +85,7 @@ Command `15` receives one `u64` behavior payload:
 
 - Global automatic control: `0x410009`.
 - Maximum control: `0x820009`.
-- Custom control uses base value `9`, with CPU automatic/manual values `1`/`3`
-  and GPU automatic/manual values `0x40`/`0xC0` at shift `16`.
+- Custom control uses base value `9`, with CPU automatic/manual values `1`/`3` and GPU automatic/manual values `0x40`/`0xC0` at shift `16`.
 
 Command `16` receives one manual speed payload:
 
@@ -107,16 +101,11 @@ Command `20` reads the timeout through:
 1 | (BK_Hotkey_Number << 8) | 0x80000
 ```
 
-The returned value contains the current brightness byte at shift `32` and
-timeout byte at shift `40`. Command `17` writes the same fields using a base
-value of `2 | (BK_Hotkey_Number << 8) | 0x80000`. RESense preserves the current
-brightness byte and changes the timeout byte between `0` and `30` seconds.
+The returned value contains the current brightness byte at shift `32` and timeout byte at shift `40`. Command `17` writes the same fields using a base value of `2 | (BK_Hotkey_Number << 8) | 0x80000`. RESense preserves the current brightness byte and changes the timeout byte between `0` and `30` seconds.
 
 ### Keyboard Lighting
 
-Command `27` handles keyboard brightness and dynamic effects. Its payload
-contains the effect selector, speed, brightness, optional direction, and
-optional RGB color.
+Command `27` handles keyboard brightness and dynamic effects. Its payload contains the effect selector, speed, brightness, optional direction, and optional RGB color.
 
 Dynamic effect selectors are:
 
@@ -128,20 +117,13 @@ Dynamic effect selectors are:
 | shifting | `4` |
 | zoom | `5` |
 
-The dynamic payload stores speed at shift `8`, brightness at shift `16`,
-direction at shift `32` when used, and RGB components at shifts `40`, `48`,
-and `56` when used.
+The dynamic payload stores speed at shift `8`, brightness at shift `16`, direction at shift `32` when used, and RGB components at shifts `40`, `48`, and `56` when used.
 
-Command `28` writes a static zone color. Zone selectors are `1`, `2`, `4`, and
-`8` for zones one through four. RGB components are stored at shifts `8`, `16`,
-and `24`. Color adjustment values come from the installed NitroSense
-`HW_Support.ini` file.
+Command `28` writes a static zone color. Zone selectors are `1`, `2`, `4`, and `8` for zones one through four. RGB components are stored at shifts `8`, `16`, and `24`. Color adjustment values come from the installed NitroSense `HW_Support.ini` file.
 
-Command `29` writes static zone enablement. Zone enable bits are `1 << 40`
-through `1 << 43`.
+Command `29` writes static zone enablement. Zone enable bits are `1 << 40` through `1 << 43`.
 
-The installed NitroSense `Main.xml` profile is updated alongside these service
-operations and is the read source for keyboard lighting state.
+The installed NitroSense `Main.xml` profile is updated alongside these service operations and is the read source for keyboard lighting state.
 
 ### Operation Mode
 
@@ -153,14 +135,11 @@ Command `30` receives the operation mode code:
 | default | `1` |
 | performance | `4` |
 
-Command `34` query `11` returns the live mode code. A mode write is considered
-successful only after this readback matches the requested mode.
+Command `34` query `11` returns the live mode code. A mode write is considered successful only after this readback matches the requested mode.
 
 ## Admin Scope
 
 - Sticky Keys uses the admin agent for the current Windows session.
-- DTS sound and WhisperMode use a reachable admin agent because their state is
-  shared by the validated system.
+- DTS sound and WhisperMode use a reachable admin agent because their state is shared by the validated system.
 
-The device layer owns session discovery and admin selection. Session IDs are
-not exposed as product state.
+The device layer owns session discovery and admin selection. Session IDs are not exposed as product state.

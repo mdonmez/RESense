@@ -83,10 +83,9 @@ resense sound music
 resense --help
 ```
 
-See the [CLI reference](docs/cli.md) for the full list of commands and the
-JSON format.
+See the [CLI reference](docs/cli.md) for the full list of commands and the JSON format.
 
-## Safety and Support
+## Safety, Responsibility and Warranty
 
 RESense can change hardware settings. Use it at your own risk. Incorrect use, unsupported hardware, service or driver changes, power loss, or interrupted operations may cause overheating, instability, data loss, hardware damage, or loss of functionality.
 

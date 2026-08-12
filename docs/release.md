@@ -22,12 +22,9 @@ RESense releases are Windows x64 artifacts built from explicit Git tags.
    git push origin v0.1.0
    ```
 
-The GitHub Actions release job validates the tag, reuses the verified release
-binary, creates a ZIP containing only `resense.exe`, creates checksums, renders
-the version-pinned installer, and publishes the GitHub Release.
+The GitHub Actions release job validates the tag, reuses the verified release binary, creates a ZIP containing only `resense.exe`, creates checksums, renders the version-pinned installer, and publishes the GitHub Release.
 
-The first release uses `v0.1.0`. Later releases use the same process with the
-new version. Existing tags and releases must never be moved or overwritten.
+The first release uses `v0.1.0`. Later releases use the same process with the new version. Existing tags and releases must never be moved or overwritten.
 
 ## User URLs
 
@@ -61,25 +58,14 @@ Latest uninstall:
 irm https://github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
 ```
 
-The installer and uninstaller are user-scoped. They do not install services,
-modify NitroSense, or require administrator privileges.
+The installer and uninstaller are user-scoped. They do not install services, modify NitroSense, or require administrator privileges.
 
 ## Self-Update
 
-`resense --version` reports the installed version and performs a fresh check for
-the latest published stable release. `resense update` uses the same source and
-does nothing when the installed version is current.
+`resense --version` reports the installed version and performs a fresh check for the latest published stable release. `resense update` uses the same source and does nothing when the installed version is current.
 
-When a newer release exists, the command starts a visible updater process. The
-updater verifies `install.ps1` against `SHA256SUMS.txt`, then uses that verified
-installer to verify the release ZIP before replacing only the exact running
-`resense.exe`. It does not change PATH, install directories, services, registry
-settings, or neighboring files. This also supports portable, development, and
-custom executable locations.
+When a newer release exists, the command starts a visible updater process. The updater verifies `install.ps1` against `SHA256SUMS.txt`, then uses that verified installer to verify the release ZIP before replacing only the exact running `resense.exe`. It does not change PATH, install directories, services, registry settings, or neighboring files. This also supports portable, development, and custom executable locations.
 
-The existing executable is preserved when the release cannot be verified or the
-replacement is blocked. The updater reports the final download, verification,
-replacement, or failure result independently after the command hands it off.
+The existing executable is preserved when the release cannot be verified or the replacement is blocked. The updater reports the final download, verification, replacement, or failure result independently after the command hands it off.
 
-Future release ZIPs contain only `resense.exe`; `SHA256SUMS.txt`, `install.ps1`,
-and `uninstall.ps1` remain separate release assets.
+Future release ZIPs contain only `resense.exe`; `SHA256SUMS.txt`, `install.ps1`, and `uninstall.ps1` remain separate release assets.

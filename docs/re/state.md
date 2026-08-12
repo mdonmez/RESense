@@ -16,10 +16,8 @@ This matrix records how the device layer obtains and verifies supported state.
 
 ## State Boundaries
 
-- Keyboard lighting state is read from the installed NitroSense keyboard
-  profile because that is the validated state store for this feature.
-- Sticky Keys follows the current Windows session. DTS sound and WhisperMode
-  follow the shared behavior observed on the validated machine.
+- Keyboard lighting state is read from the installed NitroSense keyboard profile because that is the validated state store for this feature.
+- Sticky Keys follows the current Windows session. DTS sound and WhisperMode follow the shared behavior observed on the validated machine.
 - Sound validation covers built-in speakers and wired 3.5 mm Realtek output.
 
 ## Readback Rules

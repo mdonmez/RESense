@@ -61,8 +61,7 @@ Top navigation/control buttons:
 | `GPU1_FanRate` | GPU fan RPM | `3157` at focused capture |
 | `ShowCoolBoosterStatusicon` | CoolBoost toggle | `Off` |
 
-RESense reported global automatic fan control with both fan controls set to
-automatic, matching the NitroSense fan UI state.
+RESense reported global automatic fan control with both fan controls set to automatic, matching the NitroSense fan UI state.
 
 ## Monitoring UI State
 
@@ -179,9 +178,7 @@ Recent colors:
 
 ## Keyboard Zone Observation
 
-NitroSense UI and XML reported all four lighting zones enabled. The captured
-vendor zone response returned low byte `1` for each zone. The device layer reads
-zone state from the keyboard profile XML.
+NitroSense UI and XML reported all four lighting zones enabled. The captured vendor zone response returned low byte `1` for each zone. The device layer reads zone state from the keyboard profile XML.
 
 Direct command `12` reads returned:
 
@@ -192,13 +189,10 @@ Direct command `12` reads returned:
 | 3 | `4` | `1` | enabled |
 | 4 | `8` | `1` | enabled |
 
-The captured response and profile state agree for the all-zones-enabled case.
-This observation is retained as research context; the current device layer
-uses the keyboard profile for zone state.
+The captured response and profile state agree for the all-zones-enabled case. This observation is retained as research context; the current device layer uses the keyboard profile for zone state.
 
 ## NitroSense GUI Refresh Behavior
 
 The running NitroSense WPF UI does not generally watch the HKLM/XML state that RESense updates. Decompilation showed most pages read persisted state during construction or page-specific initialization, which explains why closing and reopening NitroSense shows RESense changes.
 
-NitroSense reads persisted page state when the relevant page initializes. Close
-and reopen the page when the UI needs to display a change made externally.
+NitroSense reads persisted page state when the relevant page initializes. Close and reopen the page when the UI needs to display a change made externally.

@@ -31,8 +31,7 @@ resense
 
 `status` without a target reads the complete supported state. A target reads only that subsystem. `--watch` emits synchronous newline-delimited output using the same schema on every iteration; with `--json`, each iteration is one compact JSON line.
 
-Human output is semantic and direct. JSON is a small public API containing
-current state values only.
+Human output is semantic and direct. JSON is a small public API containing current state values only.
 
 Full JSON has this shape:
 
@@ -80,34 +79,22 @@ resense status display --json    # true, false, or null when unsupported
 resense status fan --json        # the fan object
 ```
 
-Operational or verification failures terminate with a nonzero exit code. `null`
-means that a value does not apply to the current hardware configuration.
+Operational or verification failures terminate with a nonzero exit code. `null` means that a value does not apply to the current hardware configuration.
 
 ## Version and Updates
 
-`resense --version` prints the installed version immediately, then checks the
-latest published stable GitHub release. The check is fresh on every invocation
-and has a five-second timeout. A network failure, rate limit, unavailable
-PowerShell, or invalid release response leaves the command successful and
-prints `Update check unavailable`.
+`resense --version` prints the installed version immediately, then checks the latest published stable GitHub release. The check is fresh on every invocation and has a five-second timeout. A network failure, rate limit, unavailable PowerShell, or invalid release response leaves the command successful and prints `Update check unavailable`.
 
 ```text
 RESense 0.1.0
 Up to date
 ```
 
-When a newer stable release exists, the second line is `Update available:
-<version>`.
+When a newer stable release exists, the second line is `Update available: <version>`.
 
-`resense update` performs the same check. It exits successfully without making
-changes when the installed version is current. When an update exists, it starts
-a visible PowerShell updater, verifies the release installer and archive, and
-reports the final result from that updater. The command updates only the exact
-running `resense.exe`, so portable, development, and custom executable
-locations are supported without changing neighboring files or PATH entries.
+`resense update` performs the same check. It exits successfully without making changes when the installed version is current. When an update exists, it starts a visible PowerShell updater, verifies the release installer and archive, and reports the final result from that updater. The command updates only the exact running `resense.exe`, so portable, development, and custom executable locations are supported without changing neighboring files or PATH entries.
 
-An update check failure is fatal for `resense update`, and the existing
-executable is retained if verification or replacement fails.
+An update check failure is fatal for `resense update`, and the existing executable is retained if verification or replacement fails.
 
 ## Mutations
 

@@ -1,7 +1,6 @@
 # Feature Validation Matrix
 
-This matrix defines the expected verified result for each supported command on
-the Acer Nitro AN515-58.
+This matrix defines the expected verified result for each supported command on the Acer Nitro AN515-58.
 
 ## Fans
 
@@ -46,18 +45,14 @@ Sound validation covers built-in speakers and wired 3.5 mm Realtek output.
 5. Apply the equivalent RESense command.
 6. Compare application state, persisted state, and physical behavior.
 
-Record protocol details in [protocol.md](protocol.md) only when a change
-affects the device integration.
+Record protocol details in [protocol.md](protocol.md) only when a change affects the device integration.
 
 ## Minimum Hardware Matrix
 
 - Fans: telemetry, auto, max, mixed custom control, and remembered percentages.
-- Keyboard: static and dynamic lighting, brightness, zones, effects, direction,
-  speed, color, and timeout.
+- Keyboard: static and dynamic lighting, brightness, zones, effects, direction, speed, color, and timeout.
 - Display: overdrive enable and disable.
 - Modes: quiet, default, performance, and WhisperMode behavior when available.
 - Sound: auto, music, and shooter on built-in speakers and wired output.
 
-If the Acer service or required admin context is unavailable, the command must
-return an error. Hardware capabilities that do not apply to the current device
-are reported as unavailable.
+If the Acer service or required admin context is unavailable, the command must return an error. Hardware capabilities that do not apply to the current device are reported as unavailable.
