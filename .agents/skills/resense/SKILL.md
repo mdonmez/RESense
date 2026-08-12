@@ -36,6 +36,17 @@ resense status --watch --interval 2
 
 Successful text and JSON output report state only.
 
+### Version and updates
+
+```powershell
+resense --version
+resense update
+```
+
+`--version` reports the installed version and checks the latest stable release.
+`update` installs a newer release when one is available without changing
+hardware settings.
+
 ### Fans
 
 ```powershell

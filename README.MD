@@ -74,6 +74,8 @@ Just describe what you want. Your agent can help installing and updating RESense
 
 ```powershell
 resense status
+resense --version
+resense update
 resense mode performance
 resense fan custom --cpu 70 --gpu-auto
 resense keyboard brightness 5

@@ -1,6 +1,25 @@
 #requires -Version 5.1
 
+param(
+    [string]$TargetExecutable,
+    [int]$ParentProcessId = 0
+)
+
 $ErrorActionPreference = "Stop"
+
+$BinaryUpdate = -not [string]::IsNullOrWhiteSpace($TargetExecutable)
+$TargetStagePath = $null
+if ($BinaryUpdate) {
+    if ($ParentProcessId -le 0) {
+        throw "Binary update mode requires a valid parent process ID."
+    }
+    $TargetExecutable = [System.IO.Path]::GetFullPath($TargetExecutable)
+    if (-not (Test-Path -LiteralPath $TargetExecutable -PathType Leaf)) {
+        throw "The target executable '$TargetExecutable' does not exist."
+    }
+    $targetDirectory = Split-Path -Parent $TargetExecutable
+    $TargetStagePath = Join-Path $targetDirectory (".resense-update-" + [guid]::NewGuid().ToString("N") + ".exe")
+}
 
 $Repository = "mdonmez/RESense"
 $Version = "__VERSION__"
@@ -15,17 +34,33 @@ $StagePath = Join-Path $TemporaryRoot "stage"
 $BaseUrl = "https://github.com/$Repository/releases/download/$ReleaseTag"
 
 try {
-    $running = @(Get-Process -Name "resense" -ErrorAction SilentlyContinue)
-    if ($running.Count -gt 0) {
-        throw "Close any running resense.exe process before updating RESense."
+    if (-not $BinaryUpdate) {
+        $running = @(Get-Process -Name "resense" -ErrorAction SilentlyContinue)
+        if ($running.Count -gt 0) {
+            throw "Close any running resense.exe process before updating RESense."
+        }
     }
 
     New-Item -ItemType Directory -Force -Path $DownloadRoot, $ExtractRoot, $StagePath | Out-Null
 
+    if ($BinaryUpdate) {
+        $waitDeadline = (Get-Date).AddSeconds(60)
+        while ($true) {
+            $parent = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+            if ($null -eq $parent) {
+                break
+            }
+            if ((Get-Date) -ge $waitDeadline) {
+                throw "The original RESense process did not exit within 60 seconds."
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+
     $packagePath = Join-Path $DownloadRoot $PackageName
     $checksumsPath = Join-Path $DownloadRoot "SHA256SUMS.txt"
-    Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/$PackageName" -OutFile $packagePath
-    Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/$PackageName" -OutFile $packagePath
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
 
     $checksumMatches = @(Get-Content -LiteralPath $checksumsPath | Where-Object {
         $parts = $_.Trim() -split "\s+", 2
@@ -46,8 +81,25 @@ try {
     if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
         throw "The release archive does not contain resense.exe."
     }
+    $archiveEntries = @(Get-ChildItem -LiteralPath $ExtractRoot -Recurse)
+    if ($archiveEntries.Count -ne 1 -or $archiveEntries[0].PSIsContainer -or $archiveEntries[0].Name -ne "resense.exe") {
+        throw "The release archive must contain only resense.exe."
+    }
 
-    Copy-Item -Path (Join-Path $ExtractRoot "*") -Destination $StagePath -Recurse -Force
+    if ($BinaryUpdate) {
+        Copy-Item -LiteralPath $executablePath -Destination $TargetStagePath -Force
+        try {
+            [System.IO.File]::Replace($TargetStagePath, $TargetExecutable, $null, $true)
+        }
+        catch {
+            throw "Could not replace '$TargetExecutable'. Close processes using it and try again."
+        }
+
+        Write-Output "RESense updated at $TargetExecutable."
+        return
+    }
+
+    Copy-Item -LiteralPath $executablePath -Destination $StagePath -Force
     New-Item -ItemType Directory -Force -Path $InstallParent | Out-Null
     if (Test-Path -LiteralPath $InstallPath) {
         Remove-Item -LiteralPath $InstallPath -Recurse -Force
@@ -79,6 +131,9 @@ try {
     Write-Output "Open a new terminal, or run 'resense --help' in this session."
 }
 finally {
+    if ($TargetStagePath -and (Test-Path -LiteralPath $TargetStagePath)) {
+        Remove-Item -LiteralPath $TargetStagePath -Force -ErrorAction SilentlyContinue
+    }
     if (Test-Path -LiteralPath $TemporaryRoot) {
         Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
     }

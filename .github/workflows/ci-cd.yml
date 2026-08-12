@@ -149,10 +149,21 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
           Copy-Item -LiteralPath "release-input\resense.exe" -Destination (Join-Path $packageRoot "resense.exe")
-          Copy-Item -LiteralPath "README.MD" -Destination (Join-Path $packageRoot "README.MD")
 
           $zipPath = Join-Path $releaseRoot $zipName
           Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $archiveEntries = @($archive.Entries | ForEach-Object { $_.FullName })
+          }
+          finally {
+            $archive.Dispose()
+          }
+          if ($archiveEntries.Count -ne 1 -or $archiveEntries[0] -ne "resense.exe") {
+            throw "The release ZIP must contain only resense.exe. Entries: $($archiveEntries -join ', ')"
+          }
 
           $installerTemplate = Get-Content -LiteralPath "packaging\install.ps1.template" -Raw
           $installer = $installerTemplate.Replace("__VERSION__", $version).Replace("__RELEASE_TAG__", $tag)

@@ -5,6 +5,7 @@ pub mod cli;
 pub mod device;
 pub mod error;
 pub mod output;
+pub mod update;
 
 pub(crate) mod platform;
 

@@ -4,6 +4,7 @@ RESense uses direct commands for mutations and one read command for state.
 
 ```text
 resense
+├── --version
 ├── status [fan|keyboard|mode|display|sound]
 │   [--json] [--watch] [--interval <seconds>]
 ├── fan
@@ -21,8 +22,9 @@ resense
 │   └── win-menu {enable|disable}
 ├── display
 │   └── overdrive {enable|disable}
-└── sound
-    └── <auto|music|movies|voice|strategy|rpg|shooter|custom>
+├── sound
+│   └── <auto|music|movies|voice|strategy|rpg|shooter|custom>
+└── update
 ```
 
 ## State
@@ -80,6 +82,32 @@ resense status fan --json        # the fan object
 
 Operational or verification failures terminate with a nonzero exit code. `null`
 means that a value does not apply to the current hardware configuration.
+
+## Version and Updates
+
+`resense --version` prints the installed version immediately, then checks the
+latest published stable GitHub release. The check is fresh on every invocation
+and has a five-second timeout. A network failure, rate limit, unavailable
+PowerShell, or invalid release response leaves the command successful and
+prints `Update check unavailable`.
+
+```text
+RESense 0.1.0
+Up to date
+```
+
+When a newer stable release exists, the second line is `Update available:
+<version>`.
+
+`resense update` performs the same check. It exits successfully without making
+changes when the installed version is current. When an update exists, it starts
+a visible PowerShell updater, verifies the release installer and archive, and
+reports the final result from that updater. The command updates only the exact
+running `resense.exe`, so portable, development, and custom executable
+locations are supported without changing neighboring files or PATH entries.
+
+An update check failure is fatal for `resense update`, and the existing
+executable is retained if verification or replacement fails.
 
 ## Mutations
 

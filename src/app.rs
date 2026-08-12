@@ -15,7 +15,16 @@ use std::time::Duration;
 pub fn run(cli: Cli) -> Result<()> {
     let allow_any_model = cli.dangerously_allow_any_model;
     let command = cli.command;
-    let device = Device::connect(allow_any_model)?;
+    match command {
+        Commands::Update => crate::update::run_update(),
+        command => {
+            let device = Device::connect(allow_any_model)?;
+            run_hardware_command(device, command)
+        }
+    }
+}
+
+fn run_hardware_command(device: Device, command: Commands) -> Result<()> {
     match command {
         Commands::Status(args) => {
             run_status(&device, args.target, args.json, args.watch, args.interval)?
@@ -60,6 +69,7 @@ pub fn run(cli: Cli) -> Result<()> {
             }
         },
         Commands::Sound(args) => output::print_sound(device.set_sound(sound_preset(args.preset))?),
+        Commands::Update => unreachable!("update is handled before connecting the device"),
     }
     Ok(())
 }

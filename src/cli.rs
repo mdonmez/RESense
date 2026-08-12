@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::fmt;
 
 #[derive(Parser, Debug)]
-#[command(name = "resense")]
+#[command(name = "resense", version)]
 #[command(about = "RESense command-line interface")]
 pub struct Cli {
     #[arg(
@@ -30,6 +30,8 @@ pub enum Commands {
     Display(DisplayCommand),
     #[command(about = "Set the sound preset")]
     Sound(SoundArgs),
+    #[command(about = "Check for and install updates")]
+    Update,
 }
 
 #[derive(Args, Debug)]
@@ -239,7 +241,7 @@ display_value!(StatusTarget);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
+    use clap::{Parser, error::ErrorKind};
 
     #[test]
     fn parses_targeted_status() {
@@ -269,6 +271,18 @@ mod tests {
             },
             _ => panic!("expected fan command"),
         }
+    }
+
+    #[test]
+    fn parses_update_command() {
+        let cli = Cli::try_parse_from(["resense", "update"]).unwrap();
+        assert!(matches!(cli.command, Commands::Update));
+    }
+
+    #[test]
+    fn clap_still_describes_the_version_flag() {
+        let error = Cli::try_parse_from(["resense", "--version"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::DisplayVersion);
     }
 
     #[test]
