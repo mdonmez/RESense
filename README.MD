@@ -1,14 +1,20 @@
 # RESense
 
-RESense is a Windows command-line control surface for the Acer Nitro AN515-58. It uses the validated NitroSense/PredatorSense service interface, NitroSense registry state, NitroSense keyboard XML, and Windows session APIs.
+RESense is a Windows command-line control surface for the Acer Nitro AN515-58.
 
-The supported surface is intentionally narrow: fans, operation modes, keyboard lighting and keyboard settings, LCD overdrive, and DTS-backed sound presets. Windows and the AN515-58 are the only implemented platform/model combination.
+It manages fans, operation modes, keyboard lighting and settings, LCD overdrive,
+and DTS sound presets. Windows and the AN515-58 are the supported platform and
+model.
 
 ## Safety
 
-RESense validates the detected model before connecting. `--dangerously-allow-any-model` bypasses only that model guard. Pipe availability is the service check: if `PSSvc` is stopped or unavailable, the command fails with concise service guidance and does not report a successful state.
+RESense validates the detected model before connecting.
+`--dangerously-allow-any-model` bypasses only that model check. The required
+Acer service must be available.
 
-Every supported mutation reads back the resulting state before printing it. Operational failures return a nonzero exit code; successful JSON never hides a failed read as `null`. `null` is reserved for known unsupported state, such as sound when the default output is not on the validated DTS path.
+Supported mutations verify the resulting state before printing it. Operational
+failures return a nonzero exit code. A JSON `null` means that a value does not
+apply to the current hardware configuration.
 
 ## Usage
 
@@ -29,14 +35,11 @@ Latest release installation and removal instructions are in
 [docs/release.md](docs/release.md). The release workflow publishes Windows x64
 artifacts from explicit `vX.Y.Z` tags.
 
-## Supported Audio
+## Audio
 
-The DTS path is validated for internal speakers and wired 3.5 mm Realtek headphones. Bluetooth and other non-DTS paths are intentionally unsupported, matching NitroSense's own surface on this machine.
+Sound presets are supported through the DTS path for the built-in speakers and
+wired 3.5 mm Realtek headphones.
 
-## Reverse Engineering
+## Project Notes
 
-The evidence and command catalog are indexed in [docs/re/README.md](docs/re/README.md). Raw transport and unsupported-query probing is available only through the feature-gated developer binary:
-
-```powershell
-cargo run --features dev-tools --bin probe -- query service current 13 257
-```
+Contributor research is indexed in [docs/re/README.md](docs/re/README.md).

@@ -1,9 +1,7 @@
 # Linux Port Research
 
-This is future-work research, not an implemented backend. RESense on Windows
-is a NitroSense client; Linux needs a separate hardware interface and state
-model rather than a compatibility shim over named pipes, registry state, or
-NitroSense XML.
+This is future-work research, not an implemented backend. Linux needs a native
+hardware interface and state model separate from the Windows integration.
 
 ## Current Leads
 
@@ -38,7 +36,7 @@ Most realistic first targets:
 - operation mode control and readback;
 - keyboard writes if the required kernel device exists.
 
-Still unproven:
+Needs validation:
 
 - exact per-fan mode and mixed auto/manual readback;
 - complete keyboard live readback for effects, colors, brightness, and
@@ -52,12 +50,10 @@ backend.
 ## Target Shape
 
 Use separate platform modules for Linux EC controls and Linux keyboard-device
-controls. Use live getters where the kernel exposes reliable readback; where a
-feature exposes only writes, store RESense-managed state explicitly and label
-it as persisted rather than pretending it is live.
+controls. Prefer live readback; where the hardware exposes only writes, store
+RESense-managed state explicitly as persisted state.
 
-Do not add a generic backend trait to the Windows implementation in advance.
-Introduce a shared abstraction only after a real Linux backend demonstrates a
+Introduce shared abstractions only after a real Linux backend demonstrates a
 stable common boundary.
 
 ## Reverse-Engineering Order

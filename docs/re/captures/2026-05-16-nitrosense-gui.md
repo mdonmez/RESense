@@ -17,7 +17,7 @@ This capture was taken while NitroSense was open after access returned with KB50
 - `\\.\pipe\PredatorSense_admin_agent_2`
 - `\\.\pipe\predatorsense_service_namedpipe`
 
-The service pipe appeared in lowercase during enumeration. Existing RESense code uses `\\.\pipe\PredatorSense_service_namedpipe`, which still works on this system.
+The service endpoint was enumerated case-insensitively.
 
 ## UI Automation Structure
 
@@ -61,14 +61,8 @@ Top navigation/control buttons:
 | `GPU1_FanRate` | GPU fan RPM | `3157` at focused capture |
 | `ShowCoolBoosterStatusicon` | CoolBoost toggle | `Off` |
 
-RESense status at the same session reported:
-
-- `persisted_mode`: `auto`
-- `exact_mode_detail`: `global_auto`
-- CPU/GPU custom auto flags: `true` / `true`
-- CPU/GPU custom percentages: `50` / `50`
-
-This matches the NitroSense fan UI state.
+RESense reported global automatic fan control with both fan controls set to
+automatic, matching the NitroSense fan UI state.
 
 ## Monitoring UI State
 
@@ -183,37 +177,28 @@ Recent colors:
 - `recent_color2`: `#352036`
 - `recent_color3`: `#3C2949`
 
-## New Finding: Zone Getter Decode Was Inverted
+## Keyboard Zone Observation
 
-NitroSense UI and XML both reported all four lighting zones enabled, but RESense status reported every `live_zone_status` as disabled.
+NitroSense UI and XML reported all four lighting zones enabled. The captured
+vendor zone response returned low byte `1` for each zone. The device layer reads
+zone state from the keyboard profile XML.
 
 Direct command `12` reads returned:
 
-| Zone | Query value | Raw reply | Decoded u64 | Low byte | Current RESense decode |
-| --- | ---: | --- | --- | ---: | --- |
-| 1 | `1` | `01080000000100000000000000` | `1` | `1` | `false` |
-| 2 | `2` | `01080000000100000000000000` | `1` | `1` | `false` |
-| 3 | `4` | `01080000000100000000000000` | `1` | `1` | `false` |
-| 4 | `8` | `01080000000100000000000000` | `1` | `1` | `false` |
+| Zone | Query value | Response low byte | Profile state |
+| --- | ---: | ---: | --- |
+| 1 | `1` | `1` | enabled |
+| 2 | `2` | `1` | enabled |
+| 3 | `4` | `1` | enabled |
+| 4 | `8` | `1` | enabled |
 
-Current RESense code treated `(value & 0xFF) == 0` as enabled. This capture, combined with the matching ProgramData XML and NitroSense UI state, validated the inverse mapping instead: command `12` low byte `1` means enabled. RESense was updated accordingly. A one-zone toggle re-test is still useful as additional confirmation, but the all-zones-on case is now explained by the decode bug rather than by an unknown command semantic.
+The captured response and profile state agree for the all-zones-enabled case.
+This observation is retained as research context; the current device layer
+uses the keyboard profile for zone state.
 
 ## NitroSense GUI Refresh Behavior
 
 The running NitroSense WPF UI does not generally watch the HKLM/XML state that RESense updates. Decompilation showed most pages read persisted state during construction or page-specific initialization, which explains why closing and reopening NitroSense shows RESense changes.
 
-Useful `Nitro_MainWindow_Octavia.WndProc` messages found:
-
-| Message | NitroSense behavior | RESense use |
-| ---: | --- | --- |
-| `32772` | calls `load_advance_settings(needset: true)` | best-effort refresh after advanced setting writes |
-| `32783` | sets `Lighting_popup_page.Brightness_ScrollBar.Value = wParam` when RGB keyboard support is active | best-effort live brightness update after `resense keyboard brightness` |
-| `32784` | updates visible WhisperMode status text from `wParam` | best-effort text refresh after operation-mode writes |
-
-RESense intentionally does not drive the running NitroSense UI. Early live-refresh experiments showed that fan controls require NitroSense page click handlers and can leave the GUI in an inconsistent visual state when manipulated through UI Automation. The healthier workflow is to apply changes through RESense, then close and reopen NitroSense when the GUI needs to show the updated persisted values.
-
-## Follow-Up Targets
-
-- Dynamic speed UI range appears to be `1..9`; RESense should keep the CLI and validation aligned with that instead of the old `1..5` cap.
-- Capture Sound Mode and Settings popups separately if UI navigation is acceptable.
-- Use a pipe monitor or targeted before/after snapshots while changing one NitroSense control at a time.
+NitroSense reads persisted page state when the relevant page initializes. Close
+and reopen the page when the UI needs to display a change made externally.

@@ -17,7 +17,7 @@ PredatorSense/NitroSense service interface.
 
 - `resense.exe` must be on `PATH` or in the current directory.
 - The default model check requires an Acer Nitro AN515-58.
-- Some commands require administrator privileges.
+- The Acer service and required Windows session context must be available.
 - Use `--dangerously-allow-any-model` only when intentionally bypassing the
   model check.
 
@@ -34,9 +34,7 @@ resense status fan --json
 resense status --watch --interval 2
 ```
 
-Successful text and JSON output reports state only. Do not expect source
-paths, pipe names, query numbers, registry keys, reliability labels, or other
-provenance fields.
+Successful text and JSON output report state only.
 
 ### Fans
 
@@ -65,7 +63,7 @@ resense mode performance --skip-whispermode
 resense keyboard brightness 5
 resense keyboard timeout disable
 resense keyboard static --zone1 FF0000 --zone2 off
-resense keyboard dynamic wave --speed 5 --color 00FFFF --direction fromleft
+resense keyboard dynamic wave --speed 5 --color 00FFFF --direction from-left
 resense keyboard sticky enable
 resense keyboard win-menu disable
 ```
@@ -92,9 +90,8 @@ resense sound shooter
 resense sound custom
 ```
 
-The public sound command uses the validated DTS path automatically. Supported
-outputs are the internal speakers and validated 3.5 mm Realtek output.
-Bluetooth and other non-DTS paths are unsupported.
+The public sound command uses the DTS path automatically. Supported outputs
+are the internal speakers and wired 3.5 mm Realtek output.
 
 ## Developer Probes
 

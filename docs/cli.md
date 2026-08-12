@@ -1,6 +1,6 @@
 # CLI
 
-RESense uses direct commands for mutations and one read command for state. There are no compatibility aliases for removed command forms. The public output reports what state is available, not which registry, pipe, query, or fallback produced it.
+RESense uses direct commands for mutations and one read command for state.
 
 ```text
 resense
@@ -16,7 +16,7 @@ resense
 │   ├── timeout {enable|disable}
 │   ├── static [--zone1 <hex|off>] [--zone2 <hex|off>] [--zone3 <hex|off>] [--zone4 <hex|off>]
 │   ├── dynamic <breathing|neon|shifting|wave|zoom>
-│   │   [--speed <1-9>] [--color <hex>] [--direction <fromleft|fromright>]
+│   │   [--speed <1-9>] [--color <hex>] [--direction <from-left|from-right>]
 │   ├── sticky {enable|disable}
 │   └── win-menu {enable|disable}
 ├── display
@@ -29,7 +29,8 @@ resense
 
 `status` without a target reads the complete supported state. A target reads only that subsystem. `--watch` emits synchronous newline-delimited output using the same schema on every iteration; with `--json`, each iteration is one compact JSON line.
 
-Human output is semantic and direct. JSON is a small public API containing state values only. It does not contain sources, trust, reliability, notes, raw command codes, query IDs, pipe names, or diagnostic metadata.
+Human output is semantic and direct. JSON is a small public API containing
+current state values only.
 
 Full JSON has this shape:
 
@@ -77,7 +78,8 @@ resense status display --json    # true, false, or null when unsupported
 resense status fan --json        # the fan object
 ```
 
-Unexpected transport, registry, XML, protocol, or verification failures terminate with a nonzero exit code. `null` is used only for known unsupported display/sound state.
+Operational or verification failures terminate with a nonzero exit code. `null`
+means that a value does not apply to the current hardware configuration.
 
 ## Mutations
 
@@ -87,7 +89,7 @@ resense mode performance
 resense keyboard brightness 5
 resense keyboard timeout enable
 resense keyboard static --zone1 FF0000 --zone2 off
-resense keyboard dynamic wave --speed 5 --color 00FFFF --direction fromleft
+resense keyboard dynamic wave --speed 5 --color 00FFFF --direction from-left
 resense keyboard sticky enable
 resense keyboard win-menu disable
 resense display overdrive enable
