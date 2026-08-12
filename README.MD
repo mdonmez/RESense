@@ -1,45 +1,114 @@
 # RESense
 
-RESense is a Windows command-line control surface for the Acer Nitro AN515-58.
+RESense is an open-source command-line alternative to NitroSense for Acer Nitro AN515-58 laptops.
 
-It manages fans, operation modes, keyboard lighting and settings, LCD overdrive,
-and DTS sound presets. Windows and the AN515-58 are the supported platform and
-model.
+It provides a direct way to control and check fans, power modes, keyboard lighting, display overdrive, and DTS sound presets on Windows. These features have been tested on the AN515-58 and may not work on other laptops.
 
-## Safety
+## Capabilities
 
-RESense validates the detected model before connecting.
-`--dangerously-allow-any-model` bypasses only that model check. The required
-Acer service must be available.
-
-Supported mutations verify the resulting state before printing it. Operational
-failures return a nonzero exit code. A JSON `null` means that a value does not
-apply to the current hardware configuration.
-
-## Usage
-
-```text
-resense status [fan|keyboard|mode|display|sound]
-resense fan auto|max|custom
-resense mode quiet|default|performance
-resense keyboard brightness|timeout|static|dynamic|sticky|win-menu
-resense display overdrive enable|disable
-resense sound <auto|music|movies|voice|strategy|rpg|shooter|custom>
-```
-
-See [docs/cli.md](docs/cli.md) for commands and the stable JSON contract. The architecture and ownership boundaries are in [docs/architecture.md](docs/architecture.md). Current status and future work are tracked in [docs/roadmap.md](docs/roadmap.md).
+- **Fan control** with automatic, maximum, and per-fan manual modes, plus live readings.
+- **Power modes** include quiet, default, and performance.
+- **Keyboard controls** include brightness, backlight timeout, four-zone static lighting, dynamic effects, Sticky Keys, and Windows/Menu lock.
+- **LCD overdrive**.
+- **DTS sound presets** work with internal speakers and wired 3.5 mm Realtek output.
+- **Status** shows everything or one part of the laptop, in regular text or JSON, and can keep updating on screen.
 
 ## Installation
 
-Latest release installation and removal instructions are in
-[docs/release.md](docs/release.md). The release workflow publishes Windows x64
-artifacts from explicit `vX.Y.Z` tags.
+Open Terminal (cmd/PowerShell) and run to install RESense:
 
-## Audio
+```powershell
+irm git.new/resense | iex
+```
 
-Sound presets are supported through the DTS path for the built-in speakers and
-wired 3.5 mm Realtek headphones.
+<details>
+<summary>Install a specific version</summary>
 
-## Project Notes
+Use the release-specific installer link if you need a particular version:
 
-Contributor research is indexed in [docs/re/README.md](docs/re/README.md).
+```powershell
+irm github.com/mdonmez/RESense/releases/download/v0.1.0/install.ps1 | iex
+```
+
+</details>
+
+<details>
+<summary>Uninstall RESense</summary>
+
+Remove installation with:
+
+```powershell
+irm github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
+```
+
+</details>
+
+## Agent Skill
+
+RESense includes an agent skill that teaches AI coding tools how to control your laptop.
+
+Install it with:
+
+```powershell
+npx skills add mdonmez/RESense
+```
+
+Just describe what you want. Your agent can help installing and updating RESense, checking the current state, and controlling your computer.
+
+<details>
+<summary>Skill Usage Examples</summary>
+
+> Make my laptop quieter. → `resense mode quiet`
+
+> I'm going to do heavy work. → `resense mode performance`
+
+> Reduce my keyboard brightness. → `resense keyboard brightness 2`
+
+> Cool down my laptop. → `resense fan custom --cpu 80 --gpu 80`
+
+> Is my laptop overheating? → `resense status --json`
+
+</details>
+
+## Quick Start
+
+```powershell
+resense status
+resense mode performance
+resense fan custom --cpu 70 --gpu-auto
+resense keyboard brightness 5
+resense sound music
+resense --help
+```
+
+See the [CLI reference](docs/cli.md) for the full list of commands and the
+JSON format.
+
+## Safety and Support
+
+RESense can change hardware settings. Use it at your own risk. Incorrect use, unsupported hardware, service or driver changes, power loss, or interrupted operations may cause overheating, instability, data loss, hardware damage, or loss of functionality.
+
+RESense is developed and validated on the Acer Nitro 5 AN515-58-79CQ. It is intended and tested only for Acer Nitro 5 AN515-58 series with the Acer service available. It is provided without any guarantee or warranty of compatibility, safety, accuracy, availability, or fitness for a particular purpose.
+
+The default model check helps prevent accidental use on unsupported laptops. `--dangerously-allow-any-model` deliberately bypasses that protection and should be treated as unsafe. Do not use it unless you understand and accept the risks.
+
+You are solely responsible for every command, setting, and result. Monitor your laptop, stop using RESense if anything behaves unexpectedly, and keep your own backups. The authors and contributors accept no responsibility or liability for damage, data loss, hardware problems, or other consequences resulting from the use of this software. Support for other laptops or configurations is not guaranteed.
+
+## Development
+
+```powershell
+git clone https://github.com/mdonmez/RESense.git
+cd RESense
+cargo test --all-targets --all-features
+cargo build --release --locked
+```
+
+The hardware test must be run manually on a supported AN515-58.
+
+For how the project works and how to contribute, see:
+
+- [Architecture](docs/architecture.md)
+- [Hardware tests](docs/hardware-tests.md)
+- [Reverse-engineering notes](docs/re/README.md)
+- [Roadmap](docs/roadmap.md)
+- [Release process](docs/release.md)
