@@ -1,6 +1,6 @@
 ---
 name: resense
-description: Inspect and control supported Acer Nitro hardware through the RESense CLI: fans, operation modes, keyboard lighting, display overdrive, DTS sound, and system status. Use this skill whenever the user mentions RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control, keyboard lighting, or laptop operation modes.
+description: 'Inspect and control supported Acer Nitro hardware through the RESense CLI: fans, operation modes, keyboard lighting, display overdrive, DTS sound, and system status. Use this skill whenever the user mentions RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control, keyboard lighting, or laptop operation modes.'
 ---
 
 # RESense

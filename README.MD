@@ -113,3 +113,7 @@ For how the project works and how to contribute, see:
 - [Reverse-engineering notes](docs/re/README.md)
 - [Roadmap](docs/roadmap.md)
 - [Release process](docs/release.md)
+
+## License
+
+RESense is licensed under the [Apache License 2.0](LICENSE).
