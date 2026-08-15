@@ -228,6 +228,30 @@ $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('resense-update-' 
 $baseUrl = "https://github.com/$repository/releases/download/$releaseTag"
 $apiUrl = "https://api.github.com/repos/$repository/releases/latest"
 
+function Get-Sha256Hex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath
+    )
+
+    $algorithm = $null
+    $stream = $null
+    try {
+        $algorithm = [System.Security.Cryptography.SHA256]::Create()
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        $hashBytes = $algorithm.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToUpperInvariant()
+    }
+    finally {
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+        if ($null -ne $algorithm) {
+            $algorithm.Dispose()
+        }
+    }
+}
+
 try {
     New-Item -ItemType Directory -Force -Path $temporaryRoot | Out-Null
     $headers = @{
@@ -253,7 +277,7 @@ try {
     }
 
     $expectedHash = (($checksumMatches[0].Trim() -split '\s+', 2)[0]).ToUpperInvariant()
-    $actualHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+    $actualHash = Get-Sha256Hex -FilePath $installerPath
     if ($actualHash -ne $expectedHash) {
         throw 'SHA-256 verification failed for install.ps1.'
     }
@@ -377,5 +401,7 @@ mod tests {
         assert!(script.contains("$parentProcessId = 42"));
         assert!(script.contains("install.ps1"));
         assert!(script.contains("SHA-256 verification failed for install.ps1"));
+        assert!(script.contains("function Get-Sha256Hex"));
+        assert!(!script.contains("Get-FileHash"));
     }
 }

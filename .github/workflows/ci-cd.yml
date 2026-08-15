@@ -181,9 +181,25 @@ jobs:
           $uninstallerPath = Join-Path $releaseRoot "uninstall.ps1"
           Copy-Item -LiteralPath "packaging\uninstall.ps1" -Destination $uninstallerPath
 
+          function Get-Sha256Hex {
+            param([Parameter(Mandatory = $true)][string]$FilePath)
+            $algorithm = $null
+            $stream = $null
+            try {
+              $algorithm = [System.Security.Cryptography.SHA256]::Create()
+              $stream = [System.IO.File]::OpenRead($FilePath)
+              $hashBytes = $algorithm.ComputeHash($stream)
+              return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToLowerInvariant()
+            }
+            finally {
+              if ($null -ne $stream) { $stream.Dispose() }
+              if ($null -ne $algorithm) { $algorithm.Dispose() }
+            }
+          }
+
           $assetFiles = @(Get-ChildItem -LiteralPath $releaseRoot -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" })
           $checksumLines = foreach ($asset in $assetFiles) {
-            $hash = (Get-FileHash -LiteralPath $asset.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hash = Get-Sha256Hex -FilePath $asset.FullName
             "$hash  $($asset.Name)"
           }
           Set-Content -LiteralPath (Join-Path $releaseRoot "SHA256SUMS.txt") -Value $checksumLines -Encoding ascii

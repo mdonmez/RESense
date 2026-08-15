@@ -57,6 +57,30 @@ function Get-ExpectedChecksum {
     return $hash
 }
 
+function Get-Sha256Hex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath
+    )
+
+    $algorithm = $null
+    $stream = $null
+    try {
+        $algorithm = [System.Security.Cryptography.SHA256]::Create()
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        $hashBytes = $algorithm.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToUpperInvariant()
+    }
+    finally {
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+        if ($null -ne $algorithm) {
+            $algorithm.Dispose()
+        }
+    }
+}
+
 function Assert-Checksum {
     param(
         [Parameter(Mandatory = $true)]
@@ -68,7 +92,7 @@ function Assert-Checksum {
     )
 
     $expectedHash = Get-ExpectedChecksum -ChecksumsFile $ChecksumsFile -AssetName $AssetName
-    $actualHash = (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    $actualHash = Get-Sha256Hex -FilePath $FilePath
     if ($actualHash -ne $expectedHash) {
         throw "SHA-256 verification failed for '$AssetName'."
     }
