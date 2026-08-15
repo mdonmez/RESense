@@ -208,6 +208,12 @@ jobs:
           if ($renderedInstaller -match "__VERSION__|__RELEASE_TAG__") {
             throw "The rendered installer still contains a template placeholder."
           }
+          if ($renderedInstaller -match "Get-FileHash" -or $renderedInstaller -notmatch "Get-Sha256Hex") {
+            throw "The rendered installer must use the portable SHA-256 helper."
+          }
+          if ($renderedInstaller -notmatch "skillBackupPath") {
+            throw "The rendered installer must use an atomic skill replacement backup."
+          }
           [void][scriptblock]::Create($renderedInstaller)
           [void][scriptblock]::Create((Get-Content -LiteralPath $uninstallerPath -Raw))
 

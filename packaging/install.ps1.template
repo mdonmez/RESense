@@ -106,11 +106,12 @@ function Install-Skill {
 
     $skillDirectory = Split-Path -Parent $SkillInstallPath
     $skillStagePath = Join-Path $skillDirectory (".SKILL.md." + [guid]::NewGuid().ToString("N") + ".tmp")
+    $skillBackupPath = Join-Path $skillDirectory (".SKILL.md." + [guid]::NewGuid().ToString("N") + ".bak")
     try {
         New-Item -ItemType Directory -Force -Path $skillDirectory | Out-Null
         Copy-Item -LiteralPath $SourcePath -Destination $skillStagePath -Force
         if (Test-Path -LiteralPath $SkillInstallPath -PathType Leaf) {
-            [System.IO.File]::Replace($skillStagePath, $SkillInstallPath, $null, $true)
+            [System.IO.File]::Replace($skillStagePath, $SkillInstallPath, $skillBackupPath, $true)
         }
         else {
             [System.IO.File]::Move($skillStagePath, $SkillInstallPath)
@@ -122,6 +123,9 @@ function Install-Skill {
     finally {
         if (Test-Path -LiteralPath $skillStagePath) {
             Remove-Item -LiteralPath $skillStagePath -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $skillBackupPath) {
+            Remove-Item -LiteralPath $skillBackupPath -Force -ErrorAction SilentlyContinue
         }
     }
 }
