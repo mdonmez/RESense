@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $BinaryUpdate = -not [string]::IsNullOrWhiteSpace($TargetExecutable)
 $TargetStagePath = $null
+$TargetBackupPath = $null
 if ($BinaryUpdate) {
     if ($ParentProcessId -le 0) {
         throw "Binary update mode requires a valid parent process ID."
@@ -19,6 +20,7 @@ if ($BinaryUpdate) {
     }
     $targetDirectory = Split-Path -Parent $TargetExecutable
     $TargetStagePath = Join-Path $targetDirectory (".resense-update-" + [guid]::NewGuid().ToString("N") + ".exe")
+    $TargetBackupPath = Join-Path $targetDirectory (".resense-update-" + [guid]::NewGuid().ToString("N") + ".bak")
 }
 
 $Repository = "mdonmez/RESense"
@@ -176,7 +178,7 @@ try {
     if ($BinaryUpdate) {
         Copy-Item -LiteralPath $executablePath -Destination $TargetStagePath -Force
         try {
-            [System.IO.File]::Replace($TargetStagePath, $TargetExecutable, $null, $true)
+            [System.IO.File]::Replace($TargetStagePath, $TargetExecutable, $TargetBackupPath, $true)
         }
         catch {
             throw "Could not replace '$TargetExecutable'. Close processes using it and try again."
@@ -224,6 +226,9 @@ try {
 finally {
     if ($TargetStagePath -and (Test-Path -LiteralPath $TargetStagePath)) {
         Remove-Item -LiteralPath $TargetStagePath -Force -ErrorAction SilentlyContinue
+    }
+    if ($TargetBackupPath -and (Test-Path -LiteralPath $TargetBackupPath)) {
+        Remove-Item -LiteralPath $TargetBackupPath -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $TemporaryRoot) {
         Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
