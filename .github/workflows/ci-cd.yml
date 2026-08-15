@@ -214,7 +214,7 @@ jobs:
           if ($renderedInstaller -notmatch "skillBackupPath") {
             throw "The rendered installer must use an atomic skill replacement backup."
           }
-          if ($renderedInstaller -match 'File::Replace\(\$TargetStagePath, \$TargetExecutable, \$null') {
+          if ($renderedInstaller -match '\[System\.IO\.File\]::Replace\(\$TargetStagePath, \$TargetExecutable, \$null') {
             throw "The rendered installer must use an atomic executable replacement backup."
           }
           [void][scriptblock]::Create($renderedInstaller)
