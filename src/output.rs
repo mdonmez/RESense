@@ -1,10 +1,11 @@
 use crate::cli::StatusTarget;
 use crate::device::{
-    Direction, DynamicEffect, FanControl, FanMode, FanState, KeyboardState, LightingState,
-    OperationMode, Rgb, SoundPreset, SystemState,
+    Direction, DynamicEffect, DynamicLighting, FanCustomControl, FanMode, FanState, KeyboardState,
+    LightingMode, OperationMode, Rgb, SoundPreset, SystemState,
 };
 use crate::error::Result;
 use serde::Serialize;
+use std::fmt::Write as _;
 
 pub enum StatusValue {
     All(SystemState),
@@ -27,22 +28,27 @@ struct StatusJson {
 #[derive(Debug, Serialize)]
 struct FanJson {
     mode: FanMode,
-    cpu: FanChannelJson,
-    gpu: FanChannelJson,
+    cpu: FanTelemetryJson,
+    gpu: FanTelemetryJson,
+    custom: FanCustomJson,
 }
 
 #[derive(Debug, Serialize)]
-struct FanChannelJson {
+struct FanTelemetryJson {
     temperature_c: u16,
     rpm: u16,
-    control: FanControlJson,
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-enum FanControlJson {
-    Auto,
-    Manual { percent: u8 },
+struct FanCustomJson {
+    cpu: FanCustomControlJson,
+    gpu: FanCustomControlJson,
+}
+
+#[derive(Debug, Serialize)]
+struct FanCustomControlJson {
+    mode: &'static str,
+    percent: u8,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,14 +63,21 @@ struct KeyboardJson {
 #[derive(Debug, Serialize)]
 struct LightingJson {
     mode: &'static str,
+    #[serde(rename = "static")]
+    static_config: StaticLightingJson,
+    dynamic: DynamicLightingJson,
+}
+
+#[derive(Debug, Serialize)]
+struct StaticLightingJson {
     zones: [ZoneJson; 4],
-    #[serde(skip_serializing_if = "Option::is_none")]
-    effect: Option<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    speed: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+}
+
+#[derive(Debug, Serialize)]
+struct DynamicLightingJson {
+    effect: &'static str,
     color: Option<Rgb>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    speed: u8,
     direction: Option<Direction>,
 }
 
@@ -124,31 +137,45 @@ fn print_json(value: &str) -> Result<()> {
 }
 
 fn print_text(value: StatusValue) {
+    print!("{}", render_text(value));
+}
+
+fn render_text(value: StatusValue) -> String {
+    let mut output = String::new();
     match value {
         StatusValue::All(state) => {
-            print_fan(&state.fan);
-            print_keyboard(&state.keyboard);
-            println!("mode={}", mode_name(state.mode));
-            println!(
+            render_fan(&mut output, &state.fan);
+            render_keyboard(&mut output, &state.keyboard);
+            writeln!(output, "mode={}", mode_name(state.mode)).unwrap();
+            writeln!(
+                output,
                 "display.overdrive={}",
                 optional_bool(state.display_overdrive)
-            );
-            println!("sound={}", optional_sound(state.sound));
+            )
+            .unwrap();
+            writeln!(output, "sound={}", optional_sound(state.sound)).unwrap();
         }
-        StatusValue::Fan(state) => print_fan(&state),
-        StatusValue::Keyboard(state) => print_keyboard(&state),
-        StatusValue::Mode(mode) => println!("mode={}", mode_name(mode)),
-        StatusValue::Display(value) => println!("display.overdrive={}", optional_bool(value)),
-        StatusValue::Sound(value) => println!("sound={}", optional_sound(value)),
+        StatusValue::Fan(state) => render_fan(&mut output, &state),
+        StatusValue::Keyboard(state) => render_keyboard(&mut output, &state),
+        StatusValue::Mode(mode) => {
+            writeln!(output, "mode={}", mode_name(mode)).unwrap();
+        }
+        StatusValue::Display(value) => {
+            writeln!(output, "display.overdrive={}", optional_bool(value)).unwrap();
+        }
+        StatusValue::Sound(value) => {
+            writeln!(output, "sound={}", optional_sound(value)).unwrap();
+        }
     }
+    output
 }
 
 pub fn print_fan_state(state: FanState) {
-    print_fan(&state)
+    print!("{}", render_fan_text(&state));
 }
 
 pub fn print_keyboard_state(state: KeyboardState) {
-    print_keyboard(&state)
+    print!("{}", render_keyboard_text(&state));
 }
 
 pub fn print_mode(mode: OperationMode) {
@@ -163,56 +190,86 @@ pub fn print_sound(value: SoundPreset) {
     println!("sound={}", sound_name(value));
 }
 
-fn print_fan(state: &FanState) {
-    println!("fan.mode={}", fan_mode_name(state.mode));
-    print_fan_channel("fan.cpu", &state.cpu);
-    print_fan_channel("fan.gpu", &state.gpu);
+fn render_fan_text(state: &FanState) -> String {
+    let mut output = String::new();
+    render_fan(&mut output, state);
+    output
 }
 
-fn print_fan_channel(prefix: &str, channel: &crate::device::FanReading) {
-    println!("{prefix}.temperature_c={}", channel.temperature_c);
-    println!("{prefix}.rpm={}", channel.rpm);
-    println!("{prefix}.control.mode={}", channel.control.mode_name());
-    if let Some(percent) = channel.control.percent() {
-        println!("{prefix}.control.percent={}", percent.get());
-    }
+fn render_fan(output: &mut String, state: &FanState) {
+    writeln!(output, "fan.mode={}", fan_mode_name(state.mode)).unwrap();
+    render_fan_telemetry(output, "fan.cpu", &state.cpu);
+    render_fan_telemetry(output, "fan.gpu", &state.gpu);
+    render_fan_custom(output, "fan.custom.cpu", state.custom.cpu);
+    render_fan_custom(output, "fan.custom.gpu", state.custom.gpu);
 }
 
-fn print_keyboard(state: &KeyboardState) {
-    println!("keyboard.brightness={}", state.brightness.get());
-    match state.lighting {
-        LightingState::Static { zones } => {
-            println!("keyboard.lighting.mode=static");
-            print_zones(&zones);
-        }
-        LightingState::Dynamic { zones, effect } => {
-            println!("keyboard.lighting.mode=dynamic");
-            print_zones(&zones);
-            let (name, color, direction) = dynamic_effect_text(effect.effect);
-            println!("keyboard.lighting.effect={name}");
-            println!("keyboard.lighting.speed={}", effect.speed.get());
-            if let Some(color) = color {
-                println!("keyboard.lighting.color={color}");
-            }
-            if let Some(direction) = direction {
-                println!("keyboard.lighting.direction={direction}");
-            }
-        }
-    }
-    println!("keyboard.backlight_timeout={}", state.backlight_timeout);
-    println!("keyboard.sticky_keys={}", state.sticky_keys);
-    println!("keyboard.win_menu_lock={}", state.win_menu_lock);
+fn render_fan_telemetry(output: &mut String, prefix: &str, channel: &crate::device::FanTelemetry) {
+    writeln!(output, "{prefix}.temperature_c={}", channel.temperature_c).unwrap();
+    writeln!(output, "{prefix}.rpm={}", channel.rpm).unwrap();
 }
 
-fn print_zones(zones: &[crate::device::Zone; 4]) {
+fn render_fan_custom(output: &mut String, prefix: &str, control: FanCustomControl) {
+    writeln!(output, "{prefix}.mode={}", control.mode_name()).unwrap();
+    writeln!(output, "{prefix}.percent={}", control.percent().get()).unwrap();
+}
+
+fn render_keyboard_text(state: &KeyboardState) -> String {
+    let mut output = String::new();
+    render_keyboard(&mut output, state);
+    output
+}
+
+fn render_keyboard(output: &mut String, state: &KeyboardState) {
+    writeln!(output, "keyboard.brightness={}", state.brightness.get()).unwrap();
+    writeln!(
+        output,
+        "keyboard.lighting.mode={}",
+        lighting_mode_name(state.lighting.mode)
+    )
+    .unwrap();
+    render_zones(
+        output,
+        "keyboard.lighting.static",
+        &state.lighting.static_zones,
+    );
+    render_dynamic_lighting(output, "keyboard.lighting.dynamic", state.lighting.dynamic);
+    writeln!(
+        output,
+        "keyboard.backlight_timeout={}",
+        state.backlight_timeout
+    )
+    .unwrap();
+    writeln!(output, "keyboard.sticky_keys={}", state.sticky_keys).unwrap();
+    writeln!(output, "keyboard.win_menu_lock={}", state.win_menu_lock).unwrap();
+}
+
+fn render_zones(output: &mut String, prefix: &str, zones: &[crate::device::Zone; 4]) {
     for (index, zone) in zones.iter().enumerate() {
-        println!(
-            "keyboard.lighting.zone{}.enabled={}",
+        writeln!(
+            output,
+            "{prefix}.zone{}.enabled={}",
             index + 1,
             zone.enabled
-        );
-        println!("keyboard.lighting.zone{}.color={}", index + 1, zone.color);
+        )
+        .unwrap();
+        writeln!(output, "{prefix}.zone{}.color={}", index + 1, zone.color).unwrap();
     }
+}
+
+fn render_dynamic_lighting(output: &mut String, prefix: &str, lighting: DynamicLighting) {
+    let (name, color, direction) = dynamic_effect_text(lighting.effect);
+    writeln!(output, "{prefix}.effect={name}").unwrap();
+    writeln!(
+        output,
+        "{prefix}.color={}",
+        color
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string())
+    )
+    .unwrap();
+    writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+    writeln!(output, "{prefix}.direction={}", direction.unwrap_or("null")).unwrap();
 }
 
 fn status_json(state: &SystemState) -> StatusJson {
@@ -228,55 +285,61 @@ fn status_json(state: &SystemState) -> StatusJson {
 fn fan_json(state: &FanState) -> FanJson {
     FanJson {
         mode: state.mode,
-        cpu: fan_channel_json(&state.cpu),
-        gpu: fan_channel_json(&state.gpu),
+        cpu: fan_telemetry_json(&state.cpu),
+        gpu: fan_telemetry_json(&state.gpu),
+        custom: FanCustomJson {
+            cpu: fan_custom_control_json(state.custom.cpu),
+            gpu: fan_custom_control_json(state.custom.gpu),
+        },
     }
 }
 
-fn fan_channel_json(channel: &crate::device::FanReading) -> FanChannelJson {
-    FanChannelJson {
+fn fan_telemetry_json(channel: &crate::device::FanTelemetry) -> FanTelemetryJson {
+    FanTelemetryJson {
         temperature_c: channel.temperature_c,
         rpm: channel.rpm,
-        control: match channel.control {
-            FanControl::Auto { .. } => FanControlJson::Auto,
-            FanControl::Manual { percent } => FanControlJson::Manual {
-                percent: percent.get(),
-            },
+    }
+}
+
+fn fan_custom_control_json(control: FanCustomControl) -> FanCustomControlJson {
+    match control {
+        FanCustomControl::Auto { percent } => FanCustomControlJson {
+            mode: "auto",
+            percent: percent.get(),
+        },
+        FanCustomControl::Manual { percent } => FanCustomControlJson {
+            mode: "manual",
+            percent: percent.get(),
         },
     }
 }
 
 fn keyboard_json(state: &KeyboardState) -> KeyboardJson {
-    let (mode, zones, effect, speed, color, direction) = match state.lighting {
-        LightingState::Static { zones } => ("static", zones, None, None, None, None),
-        LightingState::Dynamic { zones, effect } => {
-            let (effect_name, color, direction) = dynamic_effect_json(effect.effect);
-            (
-                "dynamic",
-                zones,
-                Some(effect_name),
-                Some(effect.speed.get()),
-                color,
-                direction,
-            )
-        }
-    };
     KeyboardJson {
         brightness: state.brightness.get(),
         lighting: LightingJson {
-            mode,
-            zones: zones.map(|zone| ZoneJson {
-                enabled: zone.enabled,
-                color: zone.color,
-            }),
-            effect,
-            speed,
-            color,
-            direction,
+            mode: lighting_mode_name(state.lighting.mode),
+            static_config: StaticLightingJson {
+                zones: state.lighting.static_zones.map(|zone| ZoneJson {
+                    enabled: zone.enabled,
+                    color: zone.color,
+                }),
+            },
+            dynamic: dynamic_lighting_json(state.lighting.dynamic),
         },
         backlight_timeout: state.backlight_timeout,
         sticky_keys: state.sticky_keys,
         win_menu_lock: state.win_menu_lock,
+    }
+}
+
+fn dynamic_lighting_json(lighting: DynamicLighting) -> DynamicLightingJson {
+    let (effect, color, direction) = dynamic_effect_json(lighting.effect);
+    DynamicLightingJson {
+        effect,
+        color,
+        speed: lighting.speed.get(),
+        direction,
     }
 }
 
@@ -327,6 +390,13 @@ fn fan_mode_name(mode: FanMode) -> &'static str {
     }
 }
 
+fn lighting_mode_name(mode: LightingMode) -> &'static str {
+    match mode {
+        LightingMode::Static => "static",
+        LightingMode::Dynamic => "dynamic",
+    }
+}
+
 fn sound_name(sound: SoundPreset) -> &'static str {
     match sound {
         SoundPreset::Music => "music",
@@ -359,31 +429,37 @@ fn bail_type<T>(message: &str) -> Result<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::device::{Brightness, FanReading, Percent, Zone};
+    use crate::device::{
+        Brightness, DynamicSpeed, FanCustomControl, FanCustomState, FanTelemetry,
+        KeyboardLightingState, Percent, Zone,
+    };
 
     fn sample_state() -> SystemState {
         SystemState {
             fan: FanState {
                 mode: FanMode::Custom,
-                cpu: FanReading {
+                cpu: FanTelemetry {
                     temperature_c: 60,
                     rpm: 2400,
-                    control: FanControl::Manual {
-                        percent: Percent::new(70).unwrap(),
-                    },
                 },
-                gpu: FanReading {
+                gpu: FanTelemetry {
                     temperature_c: 45,
                     rpm: 2300,
-                    control: FanControl::Auto {
-                        remembered_percent: Percent::new(50).unwrap(),
+                },
+                custom: FanCustomState {
+                    cpu: FanCustomControl::Manual {
+                        percent: Percent::new(70).unwrap(),
+                    },
+                    gpu: FanCustomControl::Auto {
+                        percent: Percent::new(50).unwrap(),
                     },
                 },
             },
             keyboard: KeyboardState {
                 brightness: Brightness::new(5).unwrap(),
-                lighting: LightingState::Static {
-                    zones: [
+                lighting: KeyboardLightingState {
+                    mode: LightingMode::Static,
+                    static_zones: [
                         Zone {
                             enabled: true,
                             color: Rgb::parse("FF0000").unwrap(),
@@ -401,6 +477,13 @@ mod tests {
                             color: Rgb::parse("FFFFFF").unwrap(),
                         },
                     ],
+                    dynamic: DynamicLighting {
+                        effect: DynamicEffect::Wave {
+                            color: Rgb::parse("00FFFF").unwrap(),
+                            direction: Direction::FromLeft,
+                        },
+                        speed: DynamicSpeed::new(3).unwrap(),
+                    },
                 },
                 backlight_timeout: true,
                 sticky_keys: false,
@@ -413,21 +496,60 @@ mod tests {
     }
 
     #[test]
-    fn full_json_is_the_small_state_contract() {
+    fn fan_text_uses_stable_selector_and_custom_paths() {
+        let output = render_text(StatusValue::Fan(sample_state().fan));
+        assert_eq!(
+            output,
+            "fan.mode=custom\n\
+fan.cpu.temperature_c=60\n\
+fan.cpu.rpm=2400\n\
+fan.gpu.temperature_c=45\n\
+fan.gpu.rpm=2300\n\
+fan.custom.cpu.mode=manual\n\
+fan.custom.cpu.percent=70\n\
+fan.custom.gpu.mode=auto\n\
+fan.custom.gpu.percent=50\n"
+        );
+    }
+
+    #[test]
+    fn keyboard_text_contains_both_lighting_blocks() {
+        let output = render_text(StatusValue::Keyboard(sample_state().keyboard));
+        assert!(output.contains("keyboard.lighting.mode=static\n"));
+        assert!(output.contains("keyboard.lighting.static.zone1.enabled=true\n"));
+        assert!(output.contains("keyboard.lighting.static.zone4.color=#FFFFFF\n"));
+        assert!(output.contains("keyboard.lighting.dynamic.effect=wave\n"));
+        assert!(output.contains("keyboard.lighting.dynamic.color=#00FFFF\n"));
+        assert!(output.contains("keyboard.lighting.dynamic.speed=3\n"));
+        assert!(output.contains("keyboard.lighting.dynamic.direction=fromleft\n"));
+        assert!(!output.contains("keyboard.lighting.zone1."));
+    }
+
+    #[test]
+    fn full_json_uses_stable_mode_scoped_paths() {
         let value = serde_json::from_str::<serde_json::Value>(
             &all_json(StatusValue::All(sample_state()), false).unwrap(),
         )
         .unwrap();
-        assert_eq!(value["fan"]["cpu"]["control"]["mode"], "manual");
-        assert_eq!(value["fan"]["cpu"]["control"]["percent"], 70);
-        assert_eq!(value["fan"]["gpu"]["control"]["mode"], "auto");
+        assert_eq!(value["fan"]["custom"]["cpu"]["mode"], "manual");
+        assert_eq!(value["fan"]["custom"]["cpu"]["percent"], 70);
+        assert_eq!(value["fan"]["custom"]["gpu"]["mode"], "auto");
+        assert_eq!(value["fan"]["custom"]["gpu"]["percent"], 50);
+        assert!(value["fan"]["cpu"].get("control").is_none());
+        assert!(value["fan"]["cpu"].get("effective_control").is_none());
         assert_eq!(
-            value["keyboard"]["lighting"]["zones"]
+            value["keyboard"]["lighting"]["static"]["zones"]
                 .as_array()
                 .unwrap()
                 .len(),
             4
         );
+        assert_eq!(value["keyboard"]["lighting"]["dynamic"]["effect"], "wave");
+        assert_eq!(
+            value["keyboard"]["lighting"]["dynamic"]["direction"],
+            "from_left"
+        );
+        assert!(value["keyboard"]["lighting"].get("zones").is_none());
         assert_eq!(value["mode"], "performance");
         assert!(value.get("trust").is_none());
         assert!(value.get("reliability").is_none());
@@ -455,5 +577,20 @@ mod tests {
         let value = all_json(StatusValue::All(sample_state()), true).unwrap();
         assert!(!value.contains('\n'));
         assert!(value.starts_with('{'));
+    }
+
+    #[test]
+    fn selector_explains_which_fan_block_is_applied() {
+        let mut state = sample_state();
+        state.fan.mode = FanMode::Auto;
+
+        let value = serde_json::from_str::<serde_json::Value>(
+            &all_json(StatusValue::All(state), false).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["fan"]["mode"], "auto");
+        assert_eq!(value["fan"]["custom"]["cpu"]["mode"], "manual");
+        assert_eq!(value["fan"]["custom"]["cpu"]["percent"], 70);
+        assert_eq!(value["fan"]["custom"]["gpu"]["mode"], "auto");
     }
 }

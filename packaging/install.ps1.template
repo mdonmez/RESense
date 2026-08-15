@@ -31,7 +31,76 @@ $TemporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("resense-install-"
 $DownloadRoot = Join-Path $TemporaryRoot "download"
 $ExtractRoot = Join-Path $TemporaryRoot "extract"
 $StagePath = Join-Path $TemporaryRoot "stage"
+$SkillInstallPath = Join-Path $HOME ".agents\skills\resense\SKILL.md"
 $BaseUrl = "https://github.com/$Repository/releases/download/$ReleaseTag"
+
+function Get-ExpectedChecksum {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ChecksumsFile,
+        [Parameter(Mandatory = $true)]
+        [string]$AssetName
+    )
+
+    $matches = @(Get-Content -LiteralPath $ChecksumsFile | Where-Object {
+        $parts = $_.Trim() -split "\s+", 2
+        $parts.Count -eq 2 -and $parts[1].Trim() -eq $AssetName
+    })
+    if ($matches.Count -ne 1) {
+        throw "SHA-256 entry for '$AssetName' was not found or was ambiguous."
+    }
+
+    $hash = (($matches[0].Trim() -split "\s+", 2)[0]).ToUpperInvariant()
+    if ($hash -notmatch '^[A-F0-9]{64}$') {
+        throw "SHA-256 entry for '$AssetName' is invalid."
+    }
+    return $hash
+}
+
+function Assert-Checksum {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+        [Parameter(Mandatory = $true)]
+        [string]$AssetName,
+        [Parameter(Mandatory = $true)]
+        [string]$ChecksumsFile
+    )
+
+    $expectedHash = Get-ExpectedChecksum -ChecksumsFile $ChecksumsFile -AssetName $AssetName
+    $actualHash = (Get-FileHash -LiteralPath $FilePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualHash -ne $expectedHash) {
+        throw "SHA-256 verification failed for '$AssetName'."
+    }
+}
+
+function Install-Skill {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath
+    )
+
+    $skillDirectory = Split-Path -Parent $SkillInstallPath
+    $skillStagePath = Join-Path $skillDirectory (".SKILL.md." + [guid]::NewGuid().ToString("N") + ".tmp")
+    try {
+        New-Item -ItemType Directory -Force -Path $skillDirectory | Out-Null
+        Copy-Item -LiteralPath $SourcePath -Destination $skillStagePath -Force
+        if (Test-Path -LiteralPath $SkillInstallPath -PathType Leaf) {
+            [System.IO.File]::Replace($skillStagePath, $SkillInstallPath, $null, $true)
+        }
+        else {
+            [System.IO.File]::Move($skillStagePath, $SkillInstallPath)
+        }
+    }
+    catch {
+        throw "Could not install the RESense skill at '$SkillInstallPath': $($_.Exception.Message)"
+    }
+    finally {
+        if (Test-Path -LiteralPath $skillStagePath) {
+            Remove-Item -LiteralPath $skillStagePath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 
 try {
     if (-not $BinaryUpdate) {
@@ -59,22 +128,12 @@ try {
 
     $packagePath = Join-Path $DownloadRoot $PackageName
     $checksumsPath = Join-Path $DownloadRoot "SHA256SUMS.txt"
+    $skillDownloadPath = Join-Path $DownloadRoot "SKILL.md"
     Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/$PackageName" -OutFile $packagePath
     Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
-
-    $checksumMatches = @(Get-Content -LiteralPath $checksumsPath | Where-Object {
-        $parts = $_.Trim() -split "\s+", 2
-        $parts.Count -eq 2 -and $parts[1].Trim() -eq $PackageName
-    })
-    if ($checksumMatches.Count -ne 1) {
-        throw "SHA-256 entry for '$PackageName' was not found or was ambiguous."
-    }
-
-    $expectedHash = (($checksumMatches[0].Trim() -split "\s+", 2)[0]).ToUpperInvariant()
-    $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToUpperInvariant()
-    if ($actualHash -ne $expectedHash) {
-        throw "SHA-256 verification failed for '$PackageName'."
-    }
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SKILL.md" -OutFile $skillDownloadPath
+    Assert-Checksum -FilePath $packagePath -AssetName $PackageName -ChecksumsFile $checksumsPath
+    Assert-Checksum -FilePath $skillDownloadPath -AssetName "SKILL.md" -ChecksumsFile $checksumsPath
 
     Expand-Archive -LiteralPath $packagePath -DestinationPath $ExtractRoot -Force
     $executablePath = Join-Path $ExtractRoot "resense.exe"
@@ -95,6 +154,8 @@ try {
             throw "Could not replace '$TargetExecutable'. Close processes using it and try again."
         }
 
+        Install-Skill -SourcePath $skillDownloadPath
+        Write-Output "RESense skill $Version installed at $SkillInstallPath."
         Write-Output "RESense updated at $TargetExecutable."
         return
     }
@@ -127,7 +188,9 @@ try {
         $env:Path = (($currentEntries + $InstallPath) -join ";")
     }
 
+    Install-Skill -SourcePath $skillDownloadPath
     Write-Output "RESense $Version installed at $InstallPath."
+    Write-Output "RESense skill $Version installed at $SkillInstallPath."
     Write-Output "Open a new terminal, or run 'resense --help' in this session."
 }
 finally {

@@ -149,6 +149,14 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
           Copy-Item -LiteralPath "release-input\resense.exe" -Destination (Join-Path $packageRoot "resense.exe")
+          $skillPath = Join-Path $releaseRoot "SKILL.md"
+          Copy-Item -LiteralPath ".agents\skills\resense\SKILL.md" -Destination $skillPath
+          if (-not (Test-Path -LiteralPath $skillPath -PathType Leaf)) {
+            throw "The RESense skill source was not packaged as SKILL.md."
+          }
+          if ([string]::IsNullOrWhiteSpace((Get-Content -LiteralPath $skillPath -Raw))) {
+            throw "The packaged SKILL.md is empty."
+          }
 
           $zipPath = Join-Path $releaseRoot $zipName
           Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
@@ -192,6 +200,15 @@ jobs:
           "checksums_path=$(Join-Path $releaseRoot 'SHA256SUMS.txt')" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "installer_path=$installerPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "uninstaller_path=$uninstallerPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "skill_path=$skillPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          $skillChecksumEntries = @(Get-Content -LiteralPath (Join-Path $releaseRoot 'SHA256SUMS.txt') | Where-Object {
+            $parts = $_.Trim() -split '\s+', 2
+            $parts.Count -eq 2 -and $parts[1].Trim() -eq 'SKILL.md'
+          })
+          if ($skillChecksumEntries.Count -ne 1) {
+            throw "SHA256SUMS.txt does not contain the fixed SKILL.md asset."
+          }
 
       - name: Publish GitHub Release
         shell: pwsh
@@ -206,7 +223,8 @@ jobs:
             "${{ steps.package.outputs.zip_path }}",
             "${{ steps.package.outputs.checksums_path }}",
             "${{ steps.package.outputs.installer_path }}",
-            "${{ steps.package.outputs.uninstaller_path }}"
+            "${{ steps.package.outputs.uninstaller_path }}",
+            "${{ steps.package.outputs.skill_path }}"
           )
 
           & gh release create $tag @assets --title "RESense $version" --generate-notes

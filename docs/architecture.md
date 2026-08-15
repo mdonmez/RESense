@@ -49,12 +49,14 @@ Domain types make invalid values difficult to construct:
 - `Brightness` is `1..=5`.
 - `DynamicSpeed` is `1..=9`.
 - `Rgb` is a validated color value.
-- Fan state has fixed CPU/GPU fields and distinguishes global auto, max, custom, per-fan auto, and per-fan manual control.
-- Keyboard state always has exactly four zones.
+- Fan state has a global mode selector, live CPU/GPU telemetry, and fixed per-fan custom settings. The selector determines which behavior is applied; the custom percentages remain stable saved values.
+- Keyboard state has a lighting mode selector, exactly four static zones, and a fixed dynamic configuration block. Both lighting blocks are read and preserved regardless of the selected mode.
 - Dynamic effect variants encode whether color and direction exist.
 - Operation modes and sound presets are typed enums; unavailable hardware values are optional and invalid protocol values are errors.
 
-Automatic fan changes preserve the remembered manual percentage. They do not invent or overwrite a percentage with `50%`.
+Automatic fan changes preserve the saved custom percentage. They do not invent or overwrite a percentage with `50%`.
+
+Global fan mode is the authoritative selector for what is currently applied. The custom block is intentionally stable configuration data, so it remains visible while global `auto` or `max` is active without being presented as live fan control.
 
 ## Failure Semantics
 

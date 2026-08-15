@@ -41,25 +41,35 @@ Full JSON has this shape:
     "mode": "custom",
     "cpu": {
       "temperature_c": 60,
-      "rpm": 2400,
-      "control": { "mode": "manual", "percent": 70 }
+      "rpm": 2400
     },
     "gpu": {
       "temperature_c": 45,
-      "rpm": 2300,
-      "control": { "mode": "auto" }
+      "rpm": 2300
+    },
+    "custom": {
+      "cpu": { "mode": "manual", "percent": 70 },
+      "gpu": { "mode": "auto", "percent": 50 }
     }
   },
   "keyboard": {
     "brightness": 5,
     "lighting": {
       "mode": "static",
-      "zones": [
-        { "enabled": true, "color": "#FF0000" },
-        { "enabled": false, "color": "#00FF00" },
-        { "enabled": true, "color": "#0000FF" },
-        { "enabled": false, "color": "#FFFFFF" }
-      ]
+      "static": {
+        "zones": [
+          { "enabled": true, "color": "#FF0000" },
+          { "enabled": false, "color": "#00FF00" },
+          { "enabled": true, "color": "#0000FF" },
+          { "enabled": false, "color": "#FFFFFF" }
+        ]
+      },
+      "dynamic": {
+        "effect": "wave",
+        "color": "#00FFFF",
+        "speed": 3,
+        "direction": "from_left"
+      }
     },
     "backlight_timeout": true,
     "sticky_keys": false,
@@ -79,7 +89,7 @@ resense status display --json    # true, false, or null when unsupported
 resense status fan --json        # the fan object
 ```
 
-Operational or verification failures terminate with a nonzero exit code. `null` means that a value does not apply to the current hardware configuration.
+`fan.mode` is the selector for the control currently applied. The live CPU and GPU telemetry stays under `fan.cpu` and `fan.gpu`, while the fixed `fan.custom.cpu` and `fan.custom.gpu` blocks contain the saved custom settings. The custom percentage is always the saved percentage, even when that custom fan is configured as automatic. Keyboard lighting follows the same pattern: `keyboard.lighting.mode` selects the applied block, while `keyboard.lighting.static` and `keyboard.lighting.dynamic` are always present and keep stable paths. Operational or verification failures terminate with a nonzero exit code. `null` means that a value does not apply to the current hardware configuration.
 
 ## Version and Updates
 

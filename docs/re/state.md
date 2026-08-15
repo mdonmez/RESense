@@ -5,7 +5,7 @@ This matrix records how the device layer obtains and verifies supported state.
 | Feature | State read | State write | Verification |
 | --- | --- | --- | --- |
 | Fan RPM and temperature | Live vendor telemetry | None | Compared with NitroSense telemetry |
-| Fan mode and remembered percentages | NitroSense fan settings plus telemetry | Vendor fan commands and persisted settings | Readback of mode and controls |
+| Fan mode, live telemetry, and custom percentages | NitroSense fan settings plus telemetry | Vendor fan commands and persisted settings | Readback of the global selector, live readings, and custom settings |
 | Keyboard lighting | NitroSense `Main.xml` | Vendor lighting commands and atomic XML update | Parse the resulting XML and read state |
 | Keyboard timeout | Live vendor getter | Live vendor setter | Live readback |
 | Sticky Keys | Current-session Windows state | Current-session vendor operation and persisted mirror | Current-session Windows readback |
@@ -23,5 +23,5 @@ This matrix records how the device layer obtains and verifies supported state.
 ## Readback Rules
 
 - Operation-mode writes are verified with the live mode query.
-- Fan mode combines persisted control state with live telemetry.
+- Fan state keeps the global selector, live telemetry, and saved custom settings in fixed namespaces. Global `auto` or `max` determines the applied behavior without changing the custom paths.
 - Keyboard zone state is read from the NitroSense profile.

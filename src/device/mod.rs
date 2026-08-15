@@ -107,12 +107,12 @@ pub enum FanMode {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum FanControl {
-    Auto { remembered_percent: Percent },
+pub enum FanCustomControl {
+    Auto { percent: Percent },
     Manual { percent: Percent },
 }
 
-impl FanControl {
+impl FanCustomControl {
     pub fn mode_name(self) -> &'static str {
         match self {
             Self::Auto { .. } => "auto",
@@ -120,33 +120,31 @@ impl FanControl {
         }
     }
 
-    pub fn percent(self) -> Option<Percent> {
+    pub const fn percent(self) -> Percent {
         match self {
-            Self::Auto { .. } => None,
-            Self::Manual { percent } => Some(percent),
-        }
-    }
-
-    pub fn remembered_percent(self) -> Percent {
-        match self {
-            Self::Auto { remembered_percent } => remembered_percent,
-            Self::Manual { percent } => percent,
+            Self::Auto { percent } | Self::Manual { percent } => percent,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct FanReading {
+pub struct FanTelemetry {
     pub temperature_c: u16,
     pub rpm: u16,
-    pub control: FanControl,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct FanCustomState {
+    pub cpu: FanCustomControl,
+    pub gpu: FanCustomControl,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct FanState {
     pub mode: FanMode,
-    pub cpu: FanReading,
-    pub gpu: FanReading,
+    pub cpu: FanTelemetry,
+    pub gpu: FanTelemetry,
+    pub custom: FanCustomState,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -290,20 +288,22 @@ pub struct DynamicLighting {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum LightingState {
-    Static {
-        zones: [Zone; 4],
-    },
-    Dynamic {
-        zones: [Zone; 4],
-        effect: DynamicLighting,
-    },
+pub enum LightingMode {
+    Static,
+    Dynamic,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct KeyboardLightingState {
+    pub mode: LightingMode,
+    pub static_zones: [Zone; 4],
+    pub dynamic: DynamicLighting,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct KeyboardState {
     pub brightness: Brightness,
-    pub lighting: LightingState,
+    pub lighting: KeyboardLightingState,
     pub backlight_timeout: bool,
     pub sticky_keys: bool,
     pub win_menu_lock: bool,

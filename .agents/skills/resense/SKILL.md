@@ -60,6 +60,10 @@ resense status --watch --interval 2
 
 After a mutation, use the command's verified output or a focused status read to confirm the resulting state. Surface operational errors instead of guessing or substituting fallback values.
 
+Fan status uses one selector and fixed blocks. `fan.mode` is the global behavior currently applied. Live CPU and GPU telemetry is under `fan.cpu` and `fan.gpu`. The saved custom settings are always under `fan.custom.cpu` and `fan.custom.gpu`, with a stable `mode` and `percent` field. When `fan.mode` is `auto` or `max`, do not describe a saved custom percentage as currently applied. When `fan.mode` is `custom`, the corresponding custom settings are applied. For example, `fan.mode=auto` with `fan.custom.cpu.mode=manual` and `fan.custom.cpu.percent=100` means the CPU is currently automatic and `100` is the saved custom percentage for a later custom-mode selection.
+
+Keyboard lighting uses the same stable model. `keyboard.lighting.mode` selects the currently applied block. `keyboard.lighting.static` always contains the four static zones, and `keyboard.lighting.dynamic` always contains the saved dynamic effect settings. Do not move values between `active` and `stored` paths or describe the non-selected block as currently applied. Use the selector to interpret the fixed blocks.
+
 ## Fans
 
 ```powershell

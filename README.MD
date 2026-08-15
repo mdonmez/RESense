@@ -43,15 +43,9 @@ irm github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
 
 </details>
 
-## Agent Skill
+### Agent Skill
 
-RESense includes an agent skill that teaches AI coding tools how to control your laptop.
-
-Install it with:
-
-```powershell
-npx skills add mdonmez/RESense
-```
+The RESense installer also installs the skill used by compatible AI coding tools at `$HOME/.agents/skills/resense/SKILL.md`. The skill is downloaded from the same GitHub Release as the RESense binary, so updating RESense updates the skill to the matching version without requiring Bun, Node, npm, npx, or the Skills CLI.
 
 Just describe what you want. Your agent can help installing and updating RESense, checking the current state, and controlling your computer.
 

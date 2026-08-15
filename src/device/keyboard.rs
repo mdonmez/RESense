@@ -1,6 +1,7 @@
 use super::{
     Brightness, Direction, DynamicEffect, DynamicLighting, DynamicMode, DynamicRequest,
-    DynamicSpeed, KeyboardState, LightingState, Rgb, StaticRequest, Zone, ZoneChange,
+    DynamicSpeed, KeyboardLightingState, KeyboardState, LightingMode, Rgb, StaticRequest, Zone,
+    ZoneChange,
 };
 use crate::error::Result;
 use crate::platform::pipe::Argument;
@@ -35,14 +36,14 @@ const STICKY_KEYS_SETTLE_DELAY: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct LightingSnapshot {
     brightness: Brightness,
-    mode: LightingState,
+    lighting: KeyboardLightingState,
 }
 
 pub(crate) fn read(platform: &Platform) -> Result<KeyboardState> {
     let lighting = read_lighting(platform)?;
     Ok(KeyboardState {
         brightness: lighting.brightness,
-        lighting: lighting.mode,
+        lighting: lighting.lighting,
         backlight_timeout: read_timeout(platform)?,
         sticky_keys: platform.read_sticky_keys()?,
         win_menu_lock: read_win_menu_lock(platform)?,
@@ -52,10 +53,10 @@ pub(crate) fn read(platform: &Platform) -> Result<KeyboardState> {
 pub(crate) fn set_brightness(platform: &Platform, brightness: Brightness) -> Result<KeyboardState> {
     let current = read_lighting(platform)?;
     let store = LightingStore::resolve(platform)?;
-    let payload = match current.mode {
-        LightingState::Static { .. } => encode_brightness(brightness),
-        LightingState::Dynamic { effect, .. } => {
-            let request = request_from_dynamic(effect)?;
+    let payload = match current.lighting.mode {
+        LightingMode::Static => encode_brightness(brightness),
+        LightingMode::Dynamic => {
+            let request = request_from_dynamic(current.lighting.dynamic)?;
             encode_dynamic_payload(&request, brightness, &store)?
         }
     };
@@ -73,7 +74,7 @@ pub(crate) fn set_brightness(platform: &Platform, brightness: Brightness) -> Res
         Ok(())
     })?;
     let state = read(platform)?;
-    if state.lighting != current.mode {
+    if state.lighting != current.lighting {
         bail!("keyboard lighting mode verification failed")
     }
     verify_brightness(state, brightness)
@@ -81,7 +82,7 @@ pub(crate) fn set_brightness(platform: &Platform, brightness: Brightness) -> Res
 
 pub(crate) fn set_static(platform: &Platform, request: StaticRequest) -> Result<KeyboardState> {
     let current = read_lighting(platform)?;
-    let zones = merge_zones(current.mode.zones(), request.zones);
+    let zones = merge_zones(current.lighting.static_zones, request.zones);
     let brightness = current.brightness;
     ensure_success(
         CMD_SET_KB_BACKLIGHT,
@@ -115,7 +116,9 @@ pub(crate) fn set_static(platform: &Platform, request: StaticRequest) -> Result<
     }
     mutate_profile(platform, |root| update_static_xml(root, &zones, brightness))?;
     let state = read(platform)?;
-    if !matches!(state.lighting, LightingState::Static { zones: actual } if actual == zones)
+    if state.lighting.mode != LightingMode::Static
+        || state.lighting.static_zones != zones
+        || state.lighting.dynamic != current.lighting.dynamic
         || state.brightness != brightness
     {
         bail!("static keyboard lighting verification failed")
@@ -125,7 +128,7 @@ pub(crate) fn set_static(platform: &Platform, request: StaticRequest) -> Result<
 
 pub(crate) fn set_dynamic(platform: &Platform, request: DynamicRequest) -> Result<KeyboardState> {
     let current = read_lighting(platform)?;
-    let resolved = resolve_dynamic_request(request, current.mode)?;
+    let resolved = resolve_dynamic_request(request, current.lighting)?;
     let store = LightingStore::resolve(platform)?;
     let payload = encode_dynamic_payload(&resolved, current.brightness, &store)?;
     ensure_success(
@@ -136,14 +139,13 @@ pub(crate) fn set_dynamic(platform: &Platform, request: DynamicRequest) -> Resul
         update_dynamic_xml(root, resolved, current.brightness)
     })?;
     let expected_effect = effect_from_request(resolved)?;
-    let expected_zones = current.mode.zones();
     let state = read(platform)?;
-    match state.lighting {
-        LightingState::Dynamic { zones, effect }
-            if zones == expected_zones
-                && effect.effect == expected_effect
-                && Some(effect.speed) == resolved.speed => {}
-        _ => bail!("dynamic keyboard lighting verification failed"),
+    if state.lighting.mode != LightingMode::Dynamic
+        || state.lighting.static_zones != current.lighting.static_zones
+        || state.lighting.dynamic.effect != expected_effect
+        || Some(state.lighting.dynamic.speed) != resolved.speed
+    {
+        bail!("dynamic keyboard lighting verification failed")
     }
     Ok(state)
 }
@@ -260,12 +262,9 @@ fn merge_zones(current: [Zone; 4], changes: [Option<ZoneChange>; 4]) -> [Zone; 4
 
 fn resolve_dynamic_request(
     request: DynamicRequest,
-    current: LightingState,
+    current: KeyboardLightingState,
 ) -> Result<DynamicRequest> {
-    let current_dynamic = match current {
-        LightingState::Dynamic { effect, .. } => Some(request_from_dynamic(effect)?),
-        LightingState::Static { .. } => None,
-    };
+    let current_dynamic = Some(request_from_dynamic(current.dynamic)?);
     let uses_color = !matches!(request.mode, DynamicMode::Neon);
     let uses_direction = matches!(request.mode, DynamicMode::Wave | DynamicMode::Shifting);
     let color = if uses_color {
@@ -274,7 +273,7 @@ fn resolve_dynamic_request(
             .or_else(|| current_dynamic.and_then(|value| value.color))
             .or_else(|| {
                 current
-                    .zones()
+                    .static_zones
                     .iter()
                     .find(|zone| zone.enabled)
                     .map(|zone| zone.color)
@@ -419,22 +418,29 @@ fn parse_lighting(root: &Element) -> Result<LightingSnapshot> {
     let zones: [Zone; 4] = parsed_zones
         .try_into()
         .map_err(|_| anyhow::anyhow!("keyboard XML did not contain four zones"))?;
-    let mode = if attr_u8(key, "status")? == 0 {
-        LightingState::Static { zones }
-    } else {
-        let selected = attr(pattern, "selected")?.parse::<usize>()?;
-        let selected_pattern = child(pattern, &format!("Pattern{selected}"))?;
-        let effect = DynamicLighting {
-            effect: parse_dynamic_effect(
-                selected,
-                Rgb::parse(attr(pattern, "color")?)?,
-                attr_u8(selected_pattern, "direction")?,
-            )?,
-            speed: DynamicSpeed::new(attr_u8(selected_pattern, "speed")?)?,
-        };
-        LightingState::Dynamic { zones, effect }
+    let selected = attr(pattern, "selected")?.parse::<usize>()?;
+    let selected_pattern = child(pattern, &format!("Pattern{selected}"))?;
+    let dynamic = DynamicLighting {
+        effect: parse_dynamic_effect(
+            selected,
+            Rgb::parse(attr(pattern, "color")?)?,
+            attr_u8(selected_pattern, "direction")?,
+        )?,
+        speed: DynamicSpeed::new(attr_u8(selected_pattern, "speed")?)?,
     };
-    Ok(LightingSnapshot { brightness, mode })
+    let mode = if attr_u8(key, "status")? == 0 {
+        LightingMode::Static
+    } else {
+        LightingMode::Dynamic
+    };
+    Ok(LightingSnapshot {
+        brightness,
+        lighting: KeyboardLightingState {
+            mode,
+            static_zones: zones,
+            dynamic,
+        },
+    })
 }
 
 fn parse_dynamic_effect(index: usize, color: Rgb, direction: u8) -> Result<DynamicEffect> {
@@ -619,18 +625,6 @@ fn ensure_success(command: u16, return_code: u32) -> Result<()> {
     Ok(())
 }
 
-trait LightingZones {
-    fn zones(&self) -> [Zone; 4];
-}
-
-impl LightingZones for LightingState {
-    fn zones(&self) -> [Zone; 4] {
-        match self {
-            Self::Static { zones } | Self::Dynamic { zones, .. } => *zones,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -645,25 +639,40 @@ mod tests {
     #[test]
     fn parses_typed_static_lighting_with_four_zones() {
         let xml = r##"
-<ROOT><Key status="0" brightness="3"/><Pattern selected="0" color="#FF0000"/><LightingEffects brightness="3">
+<ROOT><Key status="0" brightness="3"/><Pattern selected="1" color="#00FFFF"><Pattern1 speed="5" direction="2"/></Pattern><LightingEffects brightness="3">
 <LightingEffects_Zone1 status="1" color="#FF0000"/><LightingEffects_Zone2 status="0" color="#00FF00"/>
 <LightingEffects_Zone3 status="1" color="#0000FF"/><LightingEffects_Zone4 status="0" color="#FFFFFF"/>
 </LightingEffects></ROOT>"##;
         let parsed = parse_lighting(&Element::parse(xml.as_bytes()).unwrap()).unwrap();
         assert_eq!(parsed.brightness.get(), 3);
-        assert!(
-            matches!(parsed.mode, LightingState::Static { zones } if zones[0].enabled && !zones[1].enabled)
+        assert_eq!(parsed.lighting.mode, LightingMode::Static);
+        assert!(parsed.lighting.static_zones[0].enabled);
+        assert!(!parsed.lighting.static_zones[1].enabled);
+        assert_eq!(parsed.lighting.dynamic.speed.get(), 5);
+        assert_eq!(
+            parsed.lighting.dynamic.effect,
+            DynamicEffect::Wave {
+                color: Rgb::parse("00FFFF").unwrap(),
+                direction: Direction::FromRight,
+            }
         );
     }
 
     #[test]
     fn automatic_dynamic_defaults_are_typed() {
         let request = DynamicRequest::new(DynamicMode::Wave, None, None, None).unwrap();
-        let current = LightingState::Static {
-            zones: [Zone {
+        let current = KeyboardLightingState {
+            mode: LightingMode::Static,
+            static_zones: [Zone {
                 enabled: false,
                 color: DEFAULT_DYNAMIC_COLOR,
             }; 4],
+            dynamic: DynamicLighting {
+                effect: DynamicEffect::Breathing {
+                    color: DEFAULT_DYNAMIC_COLOR,
+                },
+                speed: DynamicSpeed::new(DEFAULT_DYNAMIC_SPEED).unwrap(),
+            },
         };
         let resolved = resolve_dynamic_request(request, current).unwrap();
         assert_eq!(resolved.speed.unwrap().get(), DEFAULT_DYNAMIC_SPEED);

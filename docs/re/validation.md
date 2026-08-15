@@ -6,14 +6,16 @@ This matrix defines the expected verified result for each supported command on t
 
 | Command | Device operation | Verified result |
 | --- | --- | --- |
-| `resense fan auto` | Global automatic control | `fan.mode=auto` with live CPU/GPU readings |
-| `resense fan max` | Maximum control | `fan.mode=max` with live CPU/GPU readings |
-| `resense fan custom --cpu-auto --gpu-auto` | Custom mode, both automatic | Both controls report `auto` |
-| `resense fan custom --cpu 70 --gpu-auto` | CPU manual, GPU automatic | CPU reports `manual=70`, GPU reports `auto` |
-| `resense fan custom --cpu-auto --gpu 70` | CPU automatic, GPU manual | CPU reports `auto`, GPU reports `manual=70` |
-| `resense fan custom --cpu 70 --gpu 70` | Both manual | Both controls report `manual=70` |
+| `resense fan auto` | Global automatic control | `fan.mode=auto`, with live CPU/GPU readings and unchanged `fan.custom.*` settings |
+| `resense fan max` | Maximum control | `fan.mode=max`, with live CPU/GPU readings and unchanged `fan.custom.*` settings |
+| `resense fan custom --cpu-auto --gpu-auto` | Custom mode, both automatic | `fan.mode=custom`, both `fan.custom.*.mode` values are `auto` |
+| `resense fan custom --cpu 70 --gpu-auto` | CPU manual, GPU automatic | `fan.custom.cpu.mode=manual`, `fan.custom.cpu.percent=70`, and GPU mode `auto` |
+| `resense fan custom --cpu-auto --gpu 70` | CPU automatic, GPU manual | CPU mode `auto`, `fan.custom.gpu.mode=manual`, and GPU percentage `70` |
+| `resense fan custom --cpu 70 --gpu 70` | Both manual | Both `fan.custom.*.mode` values are `manual` with percentage `70` |
 
-Automatic control preserves each fan's remembered manual percentage.
+Automatic control preserves each fan's saved custom percentage.
+
+The saved custom settings remain visible when global `auto` or `max` is active. Use `fan.mode` to determine the behavior currently applied.
 
 ## Keyboard
 
@@ -49,7 +51,7 @@ Record protocol details in [protocol.md](protocol.md) only when a change affects
 
 ## Minimum Hardware Matrix
 
-- Fans: telemetry, auto, max, mixed custom control, and remembered percentages.
+- Fans: telemetry, auto, max, mixed custom control, and saved custom percentages.
 - Keyboard: static and dynamic lighting, brightness, zones, effects, direction, speed, color, and timeout.
 - Display: overdrive enable and disable.
 - Modes: quiet, default, performance, and WhisperMode behavior when available.

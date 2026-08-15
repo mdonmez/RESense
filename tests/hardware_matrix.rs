@@ -3,8 +3,9 @@ mod hardware {
     use anyhow::{Context, Result, anyhow, bail};
     use resense::device::{
         Brightness, Device, Direction, DynamicEffect, DynamicLighting, DynamicMode, DynamicRequest,
-        DynamicSpeed, FanChange, FanControl, FanCustomRequest, FanMode, FanState, LightingState,
-        OperationMode, Percent, Rgb, SoundPreset, StaticRequest, SystemState, Zone, ZoneChange,
+        DynamicSpeed, FanChange, FanCustomControl, FanCustomRequest, FanMode, FanState,
+        LightingMode, OperationMode, Percent, Rgb, SoundPreset, StaticRequest, SystemState,
+        ZoneChange,
     };
     use std::thread;
     use std::time::Duration;
@@ -133,8 +134,8 @@ mod hardware {
             FanPlan::Max => expect_fan_mode(state, FanMode::Max),
             FanPlan::Custom(request) => {
                 expect_fan_mode(state, FanMode::Custom)?;
-                verify_control(state.cpu.control, request.cpu(), "CPU")?;
-                verify_control(state.gpu.control, request.gpu(), "GPU")
+                verify_custom_control(state.custom.cpu, request.cpu(), "CPU")?;
+                verify_custom_control(state.custom.gpu, request.gpu(), "GPU")
             }
         }
     }
@@ -149,10 +150,16 @@ mod hardware {
         Ok(())
     }
 
-    fn verify_control(observed: FanControl, expected: Option<FanChange>, name: &str) -> Result<()> {
+    fn verify_custom_control(
+        observed: FanCustomControl,
+        expected: Option<FanChange>,
+        name: &str,
+    ) -> Result<()> {
         match expected {
-            Some(FanChange::Auto) if matches!(observed, FanControl::Auto { .. }) => Ok(()),
-            Some(FanChange::Manual(percent)) if observed == (FanControl::Manual { percent }) => {
+            Some(FanChange::Auto) if matches!(observed, FanCustomControl::Auto { .. }) => Ok(()),
+            Some(FanChange::Manual(percent))
+                if observed == (FanCustomControl::Manual { percent }) =>
+            {
                 Ok(())
             }
             Some(expected) => {
@@ -163,6 +170,7 @@ mod hardware {
     }
 
     fn apply_keyboard(device: &Device, lighting: LightingPlan, cycle: &Cycle) -> Result<()> {
+        let before = device.keyboard()?;
         match lighting {
             LightingPlan::Static(plan) => {
                 device.set_keyboard_static(plan.request)?;
@@ -183,10 +191,11 @@ mod hardware {
         settle_after_operation();
 
         let observed = device.keyboard()?;
-        verify_keyboard(&observed, lighting, cycle)
+        verify_keyboard(&before, &observed, lighting, cycle)
     }
 
     fn verify_keyboard(
+        before: &resense::device::KeyboardState,
         state: &resense::device::KeyboardState,
         lighting: LightingPlan,
         cycle: &Cycle,
@@ -200,23 +209,30 @@ mod hardware {
         }
 
         match lighting {
-            LightingPlan::Static(plan) => match state.lighting {
-                LightingState::Static { zones } => {
-                    for (index, zone) in zones.iter().enumerate() {
-                        if zone.enabled != plan.enabled[index]
-                            || plan.colors[index].is_some_and(|color| zone.color != color)
-                        {
-                            bail!("static keyboard zone {} readback mismatch", index + 1);
-                        }
-                    }
-                    Ok(())
+            LightingPlan::Static(plan) => {
+                if state.lighting.mode != LightingMode::Static
+                    || state.lighting.dynamic != before.lighting.dynamic
+                {
+                    bail!("expected static keyboard lighting with preserved dynamic settings");
                 }
-                _ => bail!("expected static keyboard lighting"),
-            },
-            LightingPlan::Dynamic(plan) => match state.lighting {
-                LightingState::Dynamic { effect, .. } if effect == plan.expected => Ok(()),
-                _ => bail!("dynamic keyboard lighting readback mismatch"),
-            },
+                for (index, zone) in state.lighting.static_zones.iter().enumerate() {
+                    if zone.enabled != plan.enabled[index]
+                        || plan.colors[index].is_some_and(|color| zone.color != color)
+                    {
+                        bail!("static keyboard zone {} readback mismatch", index + 1);
+                    }
+                }
+                Ok(())
+            }
+            LightingPlan::Dynamic(plan) => {
+                if state.lighting.mode != LightingMode::Dynamic
+                    || state.lighting.static_zones != before.lighting.static_zones
+                    || state.lighting.dynamic != plan.expected
+                {
+                    bail!("dynamic keyboard lighting readback mismatch");
+                }
+                Ok(())
+            }
         }
     }
 
@@ -332,15 +348,15 @@ mod hardware {
 
     fn restore_fans(device: &Device, original: FanState) -> Result<()> {
         let remembered = FanCustomRequest::new(
-            Some(FanChange::Manual(original.cpu.control.remembered_percent())),
-            Some(FanChange::Manual(original.gpu.control.remembered_percent())),
+            Some(FanChange::Manual(original.custom.cpu.percent())),
+            Some(FanChange::Manual(original.custom.gpu.percent())),
         )?;
         device.set_fan_custom(remembered)?;
         settle_after_operation();
 
         let exact = FanCustomRequest::new(
-            Some(change_from_control(original.cpu.control)),
-            Some(change_from_control(original.gpu.control)),
+            Some(change_from_control(original.custom.cpu)),
+            Some(change_from_control(original.custom.gpu)),
         )?;
         device.set_fan_custom(exact)?;
         settle_after_operation();
@@ -358,15 +374,15 @@ mod hardware {
         Ok(())
     }
 
-    fn change_from_control(control: FanControl) -> FanChange {
+    fn change_from_control(control: FanCustomControl) -> FanChange {
         match control {
-            FanControl::Auto { .. } => FanChange::Auto,
-            FanControl::Manual { percent } => FanChange::Manual(percent),
+            FanCustomControl::Auto { .. } => FanChange::Auto,
+            FanCustomControl::Manual { percent } => FanChange::Manual(percent),
         }
     }
 
     fn restore_keyboard(device: &Device, original: resense::device::KeyboardState) -> Result<()> {
-        let zones = lighting_zones(original.lighting);
+        let zones = original.lighting.static_zones;
         let all_enabled =
             StaticRequest::new(zones.map(|zone| Some(ZoneChange::Color(zone.color))))?;
         device.set_keyboard_static(all_enabled)?;
@@ -381,8 +397,10 @@ mod hardware {
         device.set_keyboard_static(exact_zones)?;
         settle_after_operation();
 
-        if let LightingState::Dynamic { effect, .. } = original.lighting {
-            device.set_keyboard_dynamic(dynamic_request(effect)?)?;
+        device.set_keyboard_dynamic(dynamic_request(original.lighting.dynamic)?)?;
+        settle_after_operation();
+        if original.lighting.mode == LightingMode::Static {
+            device.set_keyboard_static(exact_zones)?;
             settle_after_operation();
         }
         device.set_keyboard_brightness(original.brightness)?;
@@ -398,12 +416,6 @@ mod hardware {
 
     fn settle_after_operation() {
         thread::sleep(OPERATION_SETTLE_DELAY);
-    }
-
-    fn lighting_zones(lighting: LightingState) -> [Zone; 4] {
-        match lighting {
-            LightingState::Static { zones } | LightingState::Dynamic { zones, .. } => zones,
-        }
     }
 
     fn dynamic_request(effect: DynamicLighting) -> Result<DynamicRequest> {
@@ -437,8 +449,7 @@ mod hardware {
 
     fn persistent_state_matches(expected: &SystemState, observed: &SystemState) -> bool {
         expected.fan.mode == observed.fan.mode
-            && expected.fan.cpu.control == observed.fan.cpu.control
-            && expected.fan.gpu.control == observed.fan.gpu.control
+            && expected.fan.custom == observed.fan.custom
             && expected.keyboard == observed.keyboard
             && expected.mode == observed.mode
             && expected.display_overdrive == observed.display_overdrive

@@ -22,7 +22,7 @@ RESense releases are Windows x64 artifacts built from explicit Git tags.
    git push origin v0.1.0
    ```
 
-The GitHub Actions release job validates the tag, reuses the verified release binary, creates a ZIP containing only `resense.exe`, creates checksums, renders the version-pinned installer, and publishes the GitHub Release.
+The GitHub Actions release job validates the tag, reuses the verified release binary, creates a ZIP containing only `resense.exe`, publishes the version-matched `SKILL.md`, creates checksums for every asset, renders the version-pinned installer, and publishes the GitHub Release.
 
 The first release uses `v0.1.0`. Later releases use the same process with the new version. Existing tags and releases must never be moved or overwritten.
 
@@ -58,7 +58,7 @@ Latest uninstall:
 irm https://github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
 ```
 
-The installer and uninstaller are user-scoped. They do not install services, modify NitroSense, or require administrator privileges.
+The installer and uninstaller are user-scoped. The installer also installs the matching skill release asset at `$HOME/.agents/skills/resense/SKILL.md`. They do not install services, modify NitroSense, or require administrator privileges.
 
 ## Self-Update
 
@@ -68,4 +68,4 @@ When a newer release exists, the command starts a visible updater process. The u
 
 The existing executable is preserved when the release cannot be verified or the replacement is blocked. The updater reports the final download, verification, replacement, or failure result independently after the command hands it off.
 
-Future release ZIPs contain only `resense.exe`; `SHA256SUMS.txt`, `install.ps1`, and `uninstall.ps1` remain separate release assets.
+Future release ZIPs contain only `resense.exe`; `SHA256SUMS.txt`, `install.ps1`, `uninstall.ps1`, and the version-matched `SKILL.md` remain separate release assets. The skill URL for a release is `https://github.com/mdonmez/RESense/releases/download/v{VERSION}/SKILL.md`.

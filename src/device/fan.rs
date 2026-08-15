@@ -1,4 +1,6 @@
-use super::{FanChange, FanControl, FanMode, FanReading, FanState, Percent};
+use super::{
+    FanChange, FanCustomControl, FanCustomState, FanMode, FanState, FanTelemetry, Percent,
+};
 use crate::error::Result;
 use crate::platform::pipe::Argument;
 use crate::platform::{FAN_CONTROL, Platform};
@@ -29,8 +31,8 @@ enum Group {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct CustomState {
-    cpu: FanControl,
-    gpu: FanControl,
+    cpu: FanCustomControl,
+    gpu: FanCustomControl,
 }
 
 pub(crate) fn read(platform: &Platform) -> Result<FanState> {
@@ -39,15 +41,17 @@ pub(crate) fn read(platform: &Platform) -> Result<FanState> {
     let mode = mode_from_code(mode_code)?;
     Ok(FanState {
         mode,
-        cpu: FanReading {
+        cpu: FanTelemetry {
             temperature_c: read_health(platform, SYSINFO_CPU_TEMP)?,
             rpm: read_health(platform, SYSINFO_CPU_FAN_SPEED)?,
-            control: custom.cpu,
         },
-        gpu: FanReading {
+        gpu: FanTelemetry {
             temperature_c: read_health(platform, SYSINFO_GPU_TEMP)?,
             rpm: read_health(platform, SYSINFO_GPU_FAN_SPEED)?,
-            control: custom.gpu,
+        },
+        custom: FanCustomState {
+            cpu: custom.cpu,
+            gpu: custom.gpu,
         },
     })
 }
@@ -101,20 +105,20 @@ pub(crate) fn set_custom(
     sync_custom(platform, merged)?;
     let state = read(platform)?;
     if state.mode != FanMode::Custom
-        || state.cpu.control != merged.cpu
-        || state.gpu.control != merged.gpu
+        || state.custom.cpu != merged.cpu
+        || state.custom.gpu != merged.gpu
     {
         bail!("custom fan control verification failed");
     }
     Ok(state)
 }
 
-fn apply_change(previous: FanControl, change: FanChange) -> FanControl {
+fn apply_change(previous: FanCustomControl, change: FanChange) -> FanCustomControl {
     match change {
-        FanChange::Auto => FanControl::Auto {
-            remembered_percent: previous.remembered_percent(),
+        FanChange::Auto => FanCustomControl::Auto {
+            percent: previous.percent(),
         },
-        FanChange::Manual(percent) => FanControl::Manual { percent },
+        FanChange::Manual(percent) => FanCustomControl::Manual { percent },
     }
 }
 
@@ -140,15 +144,17 @@ fn read_custom(platform: &Platform) -> Result<CustomState> {
     })
 }
 
-fn read_control(platform: &Platform, percent_name: &str, auto_name: &str) -> Result<FanControl> {
+fn read_control(
+    platform: &Platform,
+    percent_name: &str,
+    auto_name: &str,
+) -> Result<FanCustomControl> {
     let percent = Percent::new(platform.read_dword(FAN_CONTROL, percent_name)? as u8)?;
     let auto = platform.read_dword(FAN_CONTROL, auto_name)? != 0;
     Ok(if auto {
-        FanControl::Auto {
-            remembered_percent: percent,
-        }
+        FanCustomControl::Auto { percent }
     } else {
-        FanControl::Manual { percent }
+        FanCustomControl::Manual { percent }
     })
 }
 
@@ -158,22 +164,22 @@ fn sync_custom(platform: &Platform, state: CustomState) -> Result<()> {
         (
             FAN_CONTROL,
             "CPUFanPercentage",
-            state.cpu.remembered_percent().get() as u32,
+            state.cpu.percent().get() as u32,
         ),
         (
             FAN_CONTROL,
             "CPUFanCustomAuto",
-            matches!(state.cpu, FanControl::Auto { .. }) as u32,
+            matches!(state.cpu, FanCustomControl::Auto { .. }) as u32,
         ),
         (
             FAN_CONTROL,
             "GPU1FanPercentage",
-            state.gpu.remembered_percent().get() as u32,
+            state.gpu.percent().get() as u32,
         ),
         (
             FAN_CONTROL,
             "GPU1FanCustomAuto",
-            matches!(state.gpu, FanControl::Auto { .. }) as u32,
+            matches!(state.gpu, FanCustomControl::Auto { .. }) as u32,
         ),
     ])
 }
@@ -183,12 +189,12 @@ fn encode_speed(group: Group, percent: Percent) -> u64 {
 }
 
 fn encode_behavior(state: CustomState) -> u64 {
-    let cpu = if matches!(state.cpu, FanControl::Auto { .. }) {
+    let cpu = if matches!(state.cpu, FanCustomControl::Auto { .. }) {
         AUTO_BEHAVIOR_VALUE
     } else {
         MANUAL_BEHAVIOR_VALUE
     };
-    let gpu = if matches!(state.gpu, FanControl::Auto { .. }) {
+    let gpu = if matches!(state.gpu, FanCustomControl::Auto { .. }) {
         CUSTOM_GPU_AUTO_FLAG
     } else {
         CUSTOM_GPU_MANUAL_FLAG
@@ -246,25 +252,25 @@ mod tests {
     #[test]
     fn encodes_exact_custom_behavior() {
         let state = CustomState {
-            cpu: FanControl::Manual {
+            cpu: FanCustomControl::Manual {
                 percent: Percent::new(50).unwrap(),
             },
-            gpu: FanControl::Auto {
-                remembered_percent: Percent::new(50).unwrap(),
+            gpu: FanCustomControl::Auto {
+                percent: Percent::new(50).unwrap(),
             },
         };
         assert_eq!(encode_behavior(state), 0x430009);
     }
 
     #[test]
-    fn automatic_changes_preserve_the_remembered_percent() {
-        let previous = FanControl::Manual {
+    fn automatic_changes_preserve_the_custom_percent() {
+        let previous = FanCustomControl::Manual {
             percent: Percent::new(73).unwrap(),
         };
         assert_eq!(
             apply_change(previous, FanChange::Auto),
-            FanControl::Auto {
-                remembered_percent: Percent::new(73).unwrap()
+            FanCustomControl::Auto {
+                percent: Percent::new(73).unwrap()
             }
         );
     }
