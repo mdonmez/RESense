@@ -256,13 +256,12 @@ mod hardware {
         let dynamic_two = DynamicPlan {
             request: DynamicRequest::new(
                 DynamicMode::Wave,
-                Some(DynamicSpeed::new(2)?),
-                Some(cyan),
+                DynamicSpeed::new(2)?,
+                None,
                 Some(Direction::FromLeft),
             )?,
             expected: DynamicLighting {
                 effect: DynamicEffect::Wave {
-                    color: cyan,
                     direction: Direction::FromLeft,
                 },
                 speed: DynamicSpeed::new(2)?,
@@ -420,29 +419,21 @@ mod hardware {
 
     fn dynamic_request(effect: DynamicLighting) -> Result<DynamicRequest> {
         match effect.effect {
-            DynamicEffect::Breathing { color } => DynamicRequest::new(
-                DynamicMode::Breathing,
-                Some(effect.speed),
-                Some(color),
-                None,
-            ),
-            DynamicEffect::Neon => {
-                DynamicRequest::new(DynamicMode::Neon, Some(effect.speed), None, None)
+            DynamicEffect::Breathing { color } => {
+                DynamicRequest::new(DynamicMode::Breathing, effect.speed, Some(color), None)
             }
+            DynamicEffect::Neon => DynamicRequest::new(DynamicMode::Neon, effect.speed, None, None),
             DynamicEffect::Shifting { color, direction } => DynamicRequest::new(
                 DynamicMode::Shifting,
-                Some(effect.speed),
+                effect.speed,
                 Some(color),
                 Some(direction),
             ),
-            DynamicEffect::Wave { color, direction } => DynamicRequest::new(
-                DynamicMode::Wave,
-                Some(effect.speed),
-                Some(color),
-                Some(direction),
-            ),
+            DynamicEffect::Wave { direction } => {
+                DynamicRequest::new(DynamicMode::Wave, effect.speed, None, Some(direction))
+            }
             DynamicEffect::Zoom { color } => {
-                DynamicRequest::new(DynamicMode::Zoom, Some(effect.speed), Some(color), None)
+                DynamicRequest::new(DynamicMode::Zoom, effect.speed, Some(color), None)
             }
         }
     }

@@ -23,13 +23,6 @@ const WIN_MENU_STATUS_SHIFT: u64 = 24;
 const COLOR_TAG_COUNT: usize = 127;
 const CMD_WMI_SET_FUNCTION: u16 = 17;
 const CMD_WMI_GET_FUNCTION: u16 = 20;
-const DEFAULT_DYNAMIC_SPEED: u8 = 5;
-const DEFAULT_DYNAMIC_COLOR: Rgb = Rgb {
-    red: 255,
-    green: 0,
-    blue: 0,
-};
-const DEFAULT_DYNAMIC_DIRECTION: Direction = Direction::FromLeft;
 const TIMEOUT_SECONDS: u8 = 30;
 const STICKY_KEYS_SETTLE_DELAY: Duration = Duration::from_secs(1);
 
@@ -128,22 +121,21 @@ pub(crate) fn set_static(platform: &Platform, request: StaticRequest) -> Result<
 
 pub(crate) fn set_dynamic(platform: &Platform, request: DynamicRequest) -> Result<KeyboardState> {
     let current = read_lighting(platform)?;
-    let resolved = resolve_dynamic_request(request, current.lighting)?;
     let store = LightingStore::resolve(platform)?;
-    let payload = encode_dynamic_payload(&resolved, current.brightness, &store)?;
+    let payload = encode_dynamic_payload(&request, current.brightness, &store)?;
     ensure_success(
         CMD_SET_KB_BACKLIGHT,
         platform.service_set(CMD_SET_KB_BACKLIGHT, &[Argument::U64(payload)])?,
     )?;
     mutate_profile(platform, |root| {
-        update_dynamic_xml(root, resolved, current.brightness)
+        update_dynamic_xml(root, request, current.brightness)
     })?;
-    let expected_effect = effect_from_request(resolved)?;
+    let expected_effect = effect_from_request(request)?;
     let state = read(platform)?;
     if state.lighting.mode != LightingMode::Dynamic
         || state.lighting.static_zones != current.lighting.static_zones
         || state.lighting.dynamic.effect != expected_effect
-        || Some(state.lighting.dynamic.speed) != resolved.speed
+        || state.lighting.dynamic.speed != request.speed
     {
         bail!("dynamic keyboard lighting verification failed")
     }
@@ -260,54 +252,6 @@ fn merge_zones(current: [Zone; 4], changes: [Option<ZoneChange>; 4]) -> [Zone; 4
     })
 }
 
-fn resolve_dynamic_request(
-    request: DynamicRequest,
-    current: KeyboardLightingState,
-) -> Result<DynamicRequest> {
-    let current_dynamic = Some(request_from_dynamic(current.dynamic)?);
-    let uses_color = !matches!(request.mode, DynamicMode::Neon);
-    let uses_direction = matches!(request.mode, DynamicMode::Wave | DynamicMode::Shifting);
-    let color = if uses_color {
-        request
-            .color
-            .or_else(|| current_dynamic.and_then(|value| value.color))
-            .or_else(|| {
-                current
-                    .static_zones
-                    .iter()
-                    .find(|zone| zone.enabled)
-                    .map(|zone| zone.color)
-            })
-            .or(Some(DEFAULT_DYNAMIC_COLOR))
-    } else {
-        None
-    };
-    let direction = if uses_direction {
-        request
-            .direction
-            .or_else(|| current_dynamic.and_then(|value| value.direction))
-            .or(Some(DEFAULT_DYNAMIC_DIRECTION))
-    } else {
-        None
-    };
-    let speed = request
-        .speed
-        .or_else(|| current_dynamic.and_then(|value| value.speed))
-        .or(Some(DynamicSpeed::new(DEFAULT_DYNAMIC_SPEED)?));
-    let resolved = DynamicRequest {
-        mode: request.mode,
-        speed,
-        color,
-        direction,
-    };
-    DynamicRequest::new(
-        resolved.mode,
-        resolved.speed,
-        resolved.color,
-        resolved.direction,
-    )
-}
-
 fn request_from_dynamic(dynamic: DynamicLighting) -> Result<DynamicRequest> {
     let (mode, color, direction) = match dynamic.effect {
         DynamicEffect::Breathing { color } => (DynamicMode::Breathing, Some(color), None),
@@ -315,12 +259,10 @@ fn request_from_dynamic(dynamic: DynamicLighting) -> Result<DynamicRequest> {
         DynamicEffect::Shifting { color, direction } => {
             (DynamicMode::Shifting, Some(color), Some(direction))
         }
-        DynamicEffect::Wave { color, direction } => {
-            (DynamicMode::Wave, Some(color), Some(direction))
-        }
+        DynamicEffect::Wave { direction } => (DynamicMode::Wave, None, Some(direction)),
         DynamicEffect::Zoom { color } => (DynamicMode::Zoom, Some(color), None),
     };
-    DynamicRequest::new(mode, Some(dynamic.speed), color, direction)
+    DynamicRequest::new(mode, dynamic.speed, color, direction)
 }
 
 fn effect_from_request(request: DynamicRequest) -> Result<DynamicEffect> {
@@ -334,7 +276,6 @@ fn effect_from_request(request: DynamicRequest) -> Result<DynamicEffect> {
             direction: request.direction.context("dynamic direction is missing")?,
         },
         DynamicMode::Wave => DynamicEffect::Wave {
-            color: request.color.context("dynamic effect color is missing")?,
             direction: request.direction.context("dynamic direction is missing")?,
         },
         DynamicMode::Zoom => DynamicEffect::Zoom {
@@ -355,12 +296,11 @@ fn encode_dynamic_payload(
     let (selector, uses_color, uses_direction, wave_flag) = match request.mode {
         DynamicMode::Breathing => (1, true, false, 0),
         DynamicMode::Neon => (2, false, false, 0),
-        DynamicMode::Wave => (3, true, true, 0x0800_0000),
+        DynamicMode::Wave => (3, false, true, 0x0800_0000),
         DynamicMode::Shifting => (4, true, true, 0),
         DynamicMode::Zoom => (5, true, false, 0),
     };
-    let mut payload =
-        selector as u64 | ((request.speed.context("dynamic speed is missing")?.get() as u64) << 8);
+    let mut payload = selector as u64 | ((request.speed.get() as u64) << 8);
     payload |= (((brightness.get() - 1) as u64) * 25) << 16;
     payload |= wave_flag;
     if uses_direction {
@@ -423,7 +363,12 @@ fn parse_lighting(root: &Element) -> Result<LightingSnapshot> {
     let dynamic = DynamicLighting {
         effect: parse_dynamic_effect(
             selected,
-            Rgb::parse(attr(pattern, "color")?)?,
+            pattern
+                .attributes
+                .get("color")
+                .map(String::as_str)
+                .map(Rgb::parse)
+                .transpose()?,
             attr_u8(selected_pattern, "direction")?,
         )?,
         speed: DynamicSpeed::new(attr_u8(selected_pattern, "speed")?)?,
@@ -443,16 +388,19 @@ fn parse_lighting(root: &Element) -> Result<LightingSnapshot> {
     })
 }
 
-fn parse_dynamic_effect(index: usize, color: Rgb, direction: u8) -> Result<DynamicEffect> {
+fn parse_dynamic_effect(index: usize, color: Option<Rgb>, direction: u8) -> Result<DynamicEffect> {
     Ok(match index {
-        0 => DynamicEffect::Breathing { color },
+        0 => DynamicEffect::Breathing {
+            color: color.context("breathing effect color is missing")?,
+        },
         1 => DynamicEffect::Wave {
-            color,
             direction: parse_direction(direction)?,
         },
-        2 => DynamicEffect::Zoom { color },
+        2 => DynamicEffect::Zoom {
+            color: color.context("zoom effect color is missing")?,
+        },
         3 => DynamicEffect::Shifting {
-            color,
+            color: color.context("shifting effect color is missing")?,
             direction: parse_direction(direction)?,
         },
         4 => DynamicEffect::Neon,
@@ -514,11 +462,7 @@ fn update_dynamic_xml(
             .insert("color".to_string(), color.to_string());
     }
     let selected = child_mut(pattern, &format!("Pattern{pattern_index}"))?;
-    set_attr(
-        selected,
-        "speed",
-        request.speed.context("dynamic speed is missing")?.get(),
-    );
+    set_attr(selected, "speed", request.speed.get());
     set_attr(
         selected,
         "direction",
@@ -639,7 +583,7 @@ mod tests {
     #[test]
     fn parses_typed_static_lighting_with_four_zones() {
         let xml = r##"
-<ROOT><Key status="0" brightness="3"/><Pattern selected="1" color="#00FFFF"><Pattern1 speed="5" direction="2"/></Pattern><LightingEffects brightness="3">
+<ROOT><Key status="0" brightness="3"/><Pattern selected="1"><Pattern1 speed="5" direction="2"/></Pattern><LightingEffects brightness="3">
 <LightingEffects_Zone1 status="1" color="#FF0000"/><LightingEffects_Zone2 status="0" color="#00FF00"/>
 <LightingEffects_Zone3 status="1" color="#0000FF"/><LightingEffects_Zone4 status="0" color="#FFFFFF"/>
 </LightingEffects></ROOT>"##;
@@ -652,36 +596,42 @@ mod tests {
         assert_eq!(
             parsed.lighting.dynamic.effect,
             DynamicEffect::Wave {
-                color: Rgb::parse("00FFFF").unwrap(),
                 direction: Direction::FromRight,
             }
         );
     }
 
     #[test]
-    fn automatic_dynamic_defaults_are_typed() {
-        let request = DynamicRequest::new(DynamicMode::Wave, None, None, None).unwrap();
-        let current = KeyboardLightingState {
-            mode: LightingMode::Static,
-            static_zones: [Zone {
-                enabled: false,
-                color: DEFAULT_DYNAMIC_COLOR,
-            }; 4],
-            dynamic: DynamicLighting {
-                effect: DynamicEffect::Breathing {
-                    color: DEFAULT_DYNAMIC_COLOR,
-                },
-                speed: DynamicSpeed::new(DEFAULT_DYNAMIC_SPEED).unwrap(),
-            },
-        };
-        let resolved = resolve_dynamic_request(request, current).unwrap();
-        assert_eq!(resolved.speed.unwrap().get(), DEFAULT_DYNAMIC_SPEED);
-        assert_eq!(resolved.direction, Some(Direction::FromLeft));
+    fn wave_does_not_accept_or_require_a_color() {
+        let request = DynamicRequest::new(
+            DynamicMode::Wave,
+            DynamicSpeed::new(1).unwrap(),
+            None,
+            Some(Direction::FromLeft),
+        )
+        .unwrap();
+        assert_eq!(
+            effect_from_request(request).unwrap(),
+            DynamicEffect::Wave {
+                direction: Direction::FromLeft,
+            }
+        );
+        assert!(
+            DynamicRequest::new(
+                DynamicMode::Wave,
+                DynamicSpeed::new(1).unwrap(),
+                Some(Rgb::parse("00FFFF").unwrap()),
+                Some(Direction::FromLeft),
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn neon_is_a_colorless_dynamic_effect() {
-        let request = DynamicRequest::new(DynamicMode::Neon, None, None, None).unwrap();
+        let request =
+            DynamicRequest::new(DynamicMode::Neon, DynamicSpeed::new(1).unwrap(), None, None)
+                .unwrap();
         assert_eq!(effect_from_request(request).unwrap(), DynamicEffect::Neon);
     }
 }

@@ -10,14 +10,18 @@ resense
 ├── fan
 │   ├── auto
 │   ├── max
-│   └── custom [--cpu <percent>|--cpu-auto] [--gpu <percent>|--gpu-auto]
+│   └── custom --cpu <percent>|--cpu-auto --gpu <percent>|--gpu-auto
 ├── mode {quiet|default|performance} [--skip-whispermode]
 ├── keyboard
 │   ├── brightness <1-5>
 │   ├── timeout {enable|disable}
-│   ├── static [--zone1 <hex|off>] [--zone2 <hex|off>] [--zone3 <hex|off>] [--zone4 <hex|off>]
-│   ├── dynamic <breathing|neon|shifting|wave|zoom>
-│   │   [--speed <1-9>] [--color <hex>] [--direction <from-left|from-right>]
+│   ├── static --zone1 <hex|off> --zone2 <hex|off> --zone3 <hex|off> --zone4 <hex|off>
+│   ├── dynamic
+│   │   ├── breathing --speed <1-9> --color <hex>
+│   │   ├── neon --speed <1-9>
+│   │   ├── shifting --speed <1-9> --color <hex> --direction <from-left|from-right>
+│   │   ├── wave --speed <1-9> --direction <from-left|from-right>
+│   │   └── zoom --speed <1-9> --color <hex>
 │   ├── sticky {enable|disable}
 │   └── win-menu {enable|disable}
 ├── display
@@ -47,28 +51,26 @@ Full JSON has this shape:
       "temperature_c": 45,
       "rpm": 2300
     },
-    "custom": {
-      "cpu": { "mode": "manual", "percent": 70 },
-      "gpu": { "mode": "auto", "percent": 50 }
+    "settings": {
+      "custom": {
+        "cpu": { "mode": "manual", "percent": 70 },
+        "gpu": { "mode": "auto" }
+      }
     }
   },
   "keyboard": {
     "brightness": 5,
     "lighting": {
       "mode": "static",
-      "static": {
-        "zones": [
-          { "enabled": true, "color": "#FF0000" },
-          { "enabled": false, "color": "#00FF00" },
-          { "enabled": true, "color": "#0000FF" },
-          { "enabled": false, "color": "#FFFFFF" }
-        ]
-      },
-      "dynamic": {
-        "effect": "wave",
-        "color": "#00FFFF",
-        "speed": 3,
-        "direction": "from_left"
+      "settings": {
+        "static": {
+          "zones": [
+            { "enabled": true, "color": "#FF0000" },
+            { "enabled": false, "color": "#00FF00" },
+            { "enabled": true, "color": "#0000FF" },
+            { "enabled": false, "color": "#FFFFFF" }
+          ]
+        }
       }
     },
     "backlight_timeout": true,
@@ -89,7 +91,7 @@ resense status display --json    # true, false, or null when unsupported
 resense status fan --json        # the fan object
 ```
 
-`fan.mode` is the selector for the control currently applied. The live CPU and GPU telemetry stays under `fan.cpu` and `fan.gpu`, while the fixed `fan.custom.cpu` and `fan.custom.gpu` blocks contain the saved custom settings. The custom percentage is always the saved percentage, even when that custom fan is configured as automatic. Keyboard lighting follows the same pattern: `keyboard.lighting.mode` selects the applied block, while `keyboard.lighting.static` and `keyboard.lighting.dynamic` are always present and keep stable paths. Operational or verification failures terminate with a nonzero exit code. `null` means that a value does not apply to the current hardware configuration.
+`fan.mode` identifies the fan behavior currently applied. Live CPU and GPU telemetry stays under `fan.cpu` and `fan.gpu`. `fan.settings.custom` appears only when the global mode is `custom`; an automatic custom fan reports only `mode=auto`, while a manual custom fan also reports its percentage. Keyboard lighting uses the selected effect as `keyboard.lighting.mode` and emits only the matching `keyboard.lighting.settings.<mode>` branch. Static lighting has four zones, `wave` has speed and direction, `neon` has speed, and the other effects expose only the parameters they use. Operational or verification failures terminate with a nonzero exit code. `null` means that a value does not apply to the current hardware configuration.
 
 ## Version and Updates
 
@@ -115,8 +117,8 @@ resense fan custom --cpu 70 --gpu-auto
 resense mode performance
 resense keyboard brightness 5
 resense keyboard timeout enable
-resense keyboard static --zone1 FF0000 --zone2 off
-resense keyboard dynamic wave --speed 5 --color 00FFFF --direction from-left
+resense keyboard static --zone1 FF0000 --zone2 off --zone3 FF0000 --zone4 off
+resense keyboard dynamic wave --speed 5 --direction from-left
 resense keyboard sticky enable
 resense keyboard win-menu disable
 resense display overdrive enable

@@ -237,7 +237,7 @@ impl StaticRequest {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct DynamicRequest {
     mode: DynamicMode,
-    speed: Option<DynamicSpeed>,
+    speed: DynamicSpeed,
     color: Option<Rgb>,
     direction: Option<Direction>,
 }
@@ -245,16 +245,25 @@ pub struct DynamicRequest {
 impl DynamicRequest {
     pub fn new(
         mode: DynamicMode,
-        speed: Option<DynamicSpeed>,
+        speed: DynamicSpeed,
         color: Option<Rgb>,
         direction: Option<Direction>,
     ) -> Result<Self> {
-        let uses_color = !matches!(mode, DynamicMode::Neon);
+        let uses_color = matches!(
+            mode,
+            DynamicMode::Breathing | DynamicMode::Shifting | DynamicMode::Zoom
+        );
         let uses_direction = matches!(mode, DynamicMode::Wave | DynamicMode::Shifting);
-        if !uses_color && color.is_some() {
+        if uses_color != color.is_some() {
+            if uses_color {
+                bail!("{mode:?} requires a color");
+            }
             bail!("{mode:?} does not use a color");
         }
-        if !uses_direction && direction.is_some() {
+        if uses_direction != direction.is_some() {
+            if uses_direction {
+                bail!("{mode:?} requires a direction");
+            }
             bail!("{mode:?} does not use a direction");
         }
         Ok(Self {
@@ -277,7 +286,7 @@ pub enum DynamicEffect {
     Breathing { color: Rgb },
     Neon,
     Shifting { color: Rgb, direction: Direction },
-    Wave { color: Rgb, direction: Direction },
+    Wave { direction: Direction },
     Zoom { color: Rgb },
 }
 

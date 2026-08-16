@@ -70,13 +70,33 @@ pub enum FanCommands {
 
 #[derive(Args, Debug)]
 pub struct FanCustomArgs {
-    #[arg(long, help = "CPU fan speed percentage")]
+    #[arg(
+        long,
+        conflicts_with = "cpu_auto",
+        required_unless_present = "cpu_auto",
+        help = "CPU fan speed percentage"
+    )]
     pub cpu: Option<u8>,
-    #[arg(long, help = "GPU fan speed percentage")]
+    #[arg(
+        long,
+        conflicts_with = "gpu_auto",
+        required_unless_present = "gpu_auto",
+        help = "GPU fan speed percentage"
+    )]
     pub gpu: Option<u8>,
-    #[arg(long = "cpu-auto", help = "Set the CPU fan to automatic mode")]
+    #[arg(
+        long = "cpu-auto",
+        conflicts_with = "cpu",
+        required_unless_present = "cpu",
+        help = "Set the CPU fan to automatic mode"
+    )]
     pub cpu_auto: bool,
-    #[arg(long = "gpu-auto", help = "Set the GPU fan to automatic mode")]
+    #[arg(
+        long = "gpu-auto",
+        conflicts_with = "gpu",
+        required_unless_present = "gpu",
+        help = "Set the GPU fan to automatic mode"
+    )]
     pub gpu_auto: bool,
 }
 
@@ -96,7 +116,7 @@ pub enum KeyboardCommands {
     #[command(about = "Set 4-zone static keyboard lighting")]
     Static(KeyboardStaticArgs),
     #[command(about = "Set a dynamic keyboard lighting effect")]
-    Dynamic(KeyboardDynamicArgs),
+    Dynamic(KeyboardDynamicCommand),
     #[command(about = "Enable or disable Sticky Keys")]
     Sticky(ToggleArgs),
     #[command(about = "Enable or disable Windows/Menu key lock")]
@@ -111,26 +131,90 @@ pub struct KeyboardBrightnessArgs {
 
 #[derive(Args, Debug)]
 pub struct KeyboardStaticArgs {
-    #[arg(long, help = "Zone 1 color as a 6-digit hex value or off")]
+    #[arg(
+        long,
+        required = true,
+        help = "Zone 1 color as a 6-digit hex value or off"
+    )]
     pub zone1: Option<String>,
-    #[arg(long, help = "Zone 2 color as a 6-digit hex value or off")]
+    #[arg(
+        long,
+        required = true,
+        help = "Zone 2 color as a 6-digit hex value or off"
+    )]
     pub zone2: Option<String>,
-    #[arg(long, help = "Zone 3 color as a 6-digit hex value or off")]
+    #[arg(
+        long,
+        required = true,
+        help = "Zone 3 color as a 6-digit hex value or off"
+    )]
     pub zone3: Option<String>,
-    #[arg(long, help = "Zone 4 color as a 6-digit hex value or off")]
+    #[arg(
+        long,
+        required = true,
+        help = "Zone 4 color as a 6-digit hex value or off"
+    )]
     pub zone4: Option<String>,
 }
 
 #[derive(Args, Debug)]
-pub struct KeyboardDynamicArgs {
-    #[arg(help = "Dynamic effect mode")]
-    pub mode: KeyboardDynamicMode,
-    #[arg(long, help = "Effect speed from 1 to 9")]
-    pub speed: Option<u8>,
-    #[arg(long, help = "Effect color as a 6-digit hex value")]
-    pub color: Option<String>,
-    #[arg(long, help = "Effect direction: fromleft or fromright")]
-    pub direction: Option<Direction>,
+pub struct KeyboardDynamicCommand {
+    #[command(subcommand)]
+    pub command: KeyboardDynamicCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KeyboardDynamicCommands {
+    #[command(about = "Breathing effect with color and speed")]
+    Breathing(DynamicColorArgs),
+    #[command(about = "Multicolor neon effect with speed")]
+    Neon(DynamicSpeedArgs),
+    #[command(about = "Shifting effect with color, speed, and direction")]
+    Shifting(DynamicColorDirectionArgs),
+    #[command(about = "Rainbow wave effect with speed and direction")]
+    Wave(DynamicDirectionArgs),
+    #[command(about = "Zoom effect with color and speed")]
+    Zoom(DynamicColorArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct DynamicSpeedArgs {
+    #[arg(long, required = true, help = "Effect speed from 1 to 9")]
+    pub speed: u8,
+}
+
+#[derive(Args, Debug)]
+pub struct DynamicColorArgs {
+    #[arg(long, required = true, help = "Effect speed from 1 to 9")]
+    pub speed: u8,
+    #[arg(long, required = true, help = "Effect color as a 6-digit hex value")]
+    pub color: String,
+}
+
+#[derive(Args, Debug)]
+pub struct DynamicColorDirectionArgs {
+    #[arg(long, required = true, help = "Effect speed from 1 to 9")]
+    pub speed: u8,
+    #[arg(long, required = true, help = "Effect color as a 6-digit hex value")]
+    pub color: String,
+    #[arg(
+        long,
+        required = true,
+        help = "Effect direction: from-left or from-right"
+    )]
+    pub direction: Direction,
+}
+
+#[derive(Args, Debug)]
+pub struct DynamicDirectionArgs {
+    #[arg(long, required = true, help = "Effect speed from 1 to 9")]
+    pub speed: u8,
+    #[arg(
+        long,
+        required = true,
+        help = "Effect direction: from-left or from-right"
+    )]
+    pub direction: Direction,
 }
 
 #[derive(Args, Debug)]
@@ -173,15 +257,6 @@ pub enum StatusTarget {
     Mode,
     Display,
     Sound,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-pub enum KeyboardDynamicMode {
-    Breathing,
-    Neon,
-    Shifting,
-    Wave,
-    Zoom,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -231,7 +306,6 @@ macro_rules! display_value {
     };
 }
 
-display_value!(KeyboardDynamicMode);
 display_value!(Direction);
 display_value!(OperatingMode);
 display_value!(ToggleState);
@@ -274,9 +348,86 @@ mod tests {
     }
 
     #[test]
+    fn requires_both_fan_custom_selections() {
+        assert!(Cli::try_parse_from(["resense", "fan", "custom", "--cpu", "70"]).is_err());
+        assert!(
+            Cli::try_parse_from(["resense", "fan", "custom", "--cpu-auto", "--gpu-auto"]).is_ok()
+        );
+    }
+
+    #[test]
+    fn requires_all_static_keyboard_zones() {
+        assert!(
+            Cli::try_parse_from([
+                "resense", "keyboard", "static", "--zone1", "FF0000", "--zone2", "off", "--zone3",
+                "FF0000",
+            ])
+            .is_err()
+        );
+        assert!(
+            Cli::try_parse_from([
+                "resense", "keyboard", "static", "--zone1", "FF0000", "--zone2", "off", "--zone3",
+                "FF0000", "--zone4", "off",
+            ])
+            .is_ok()
+        );
+    }
+
+    #[test]
     fn parses_update_command() {
         let cli = Cli::try_parse_from(["resense", "update"]).unwrap();
         assert!(matches!(cli.command, Commands::Update));
+    }
+
+    #[test]
+    fn parses_effect_specific_dynamic_commands() {
+        let cli = Cli::try_parse_from([
+            "resense",
+            "keyboard",
+            "dynamic",
+            "wave",
+            "--speed",
+            "1",
+            "--direction",
+            "from-left",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Commands::Keyboard(command) => match command.command {
+                KeyboardCommands::Dynamic(dynamic) => {
+                    assert!(matches!(dynamic.command, KeyboardDynamicCommands::Wave(_)));
+                }
+                _ => panic!("expected dynamic keyboard command"),
+            },
+            _ => panic!("expected keyboard command"),
+        }
+    }
+
+    #[test]
+    fn rejects_wave_color() {
+        assert!(
+            Cli::try_parse_from([
+                "resense", "keyboard", "dynamic", "wave", "--color", "00FFFF",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_dynamic_commands() {
+        assert!(Cli::try_parse_from(["resense", "keyboard", "dynamic", "wave"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "resense",
+                "keyboard",
+                "dynamic",
+                "breathing",
+                "--speed",
+                "1"
+            ])
+            .is_err()
+        );
     }
 
     #[test]

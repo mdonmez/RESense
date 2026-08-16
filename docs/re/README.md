@@ -28,7 +28,7 @@ Keep experiments reversible and record protocol details in [protocol.md](protoco
 
 | Feature | Observed state | Validation basis |
 | --- | --- | --- |
-| Fans | Live telemetry, global mode, and fixed custom settings | NitroSense UI, live readings, and reversible hardware cycles |
+| Fans | Live telemetry, global mode, and typed custom controls | NitroSense UI, live readings, and reversible hardware cycles |
 | Keyboard lighting | NitroSense keyboard profile XML | UI, XML, service writes, and physical lighting |
 | Keyboard timeout | Live vendor getter/setter | NitroSense toggle and readback |
 | Sticky Keys | Current Windows session | Windows state and session-specific validation |

@@ -6,16 +6,16 @@ This matrix defines the expected verified result for each supported command on t
 
 | Command | Device operation | Verified result |
 | --- | --- | --- |
-| `resense fan auto` | Global automatic control | `fan.mode=auto`, with live CPU/GPU readings and unchanged `fan.custom.*` settings |
-| `resense fan max` | Maximum control | `fan.mode=max`, with live CPU/GPU readings and unchanged `fan.custom.*` settings |
-| `resense fan custom --cpu-auto --gpu-auto` | Custom mode, both automatic | `fan.mode=custom`, both `fan.custom.*.mode` values are `auto` |
-| `resense fan custom --cpu 70 --gpu-auto` | CPU manual, GPU automatic | `fan.custom.cpu.mode=manual`, `fan.custom.cpu.percent=70`, and GPU mode `auto` |
-| `resense fan custom --cpu-auto --gpu 70` | CPU automatic, GPU manual | CPU mode `auto`, `fan.custom.gpu.mode=manual`, and GPU percentage `70` |
-| `resense fan custom --cpu 70 --gpu 70` | Both manual | Both `fan.custom.*.mode` values are `manual` with percentage `70` |
+| `resense fan auto` | Global automatic control | `fan.mode=auto`, with live CPU/GPU readings and no inactive custom block |
+| `resense fan max` | Maximum control | `fan.mode=max`, with live CPU/GPU readings and no inactive custom block |
+| `resense fan custom --cpu-auto --gpu-auto` | Custom mode, both automatic | `fan.mode=custom`, with both `fan.settings.custom.*.mode` values set to `auto` |
+| `resense fan custom --cpu 70 --gpu-auto` | CPU manual, GPU automatic | `fan.settings.custom.cpu.mode=manual`, CPU percentage `70`, and GPU mode `auto` |
+| `resense fan custom --cpu-auto --gpu 70` | CPU automatic, GPU manual | CPU mode `auto`, `fan.settings.custom.gpu.mode=manual`, and GPU percentage `70` |
+| `resense fan custom --cpu 70 --gpu 70` | Both manual | Both `fan.settings.custom.*.mode` values are `manual` with percentage `70` |
 
 Automatic control preserves each fan's saved custom percentage.
 
-The saved custom settings remain visible when global `auto` or `max` is active. Use `fan.mode` to determine the behavior currently applied.
+The saved custom settings remain physically preserved for later use, but public status shows them only while global `custom` is active. Use `fan.mode` to determine the behavior currently applied.
 
 ## Keyboard
 
@@ -23,7 +23,7 @@ The saved custom settings remain visible when global `auto` or `max` is active. 
 | --- | --- | --- |
 | `resense keyboard brightness <1..5>` | Set keyboard brightness | Brightness is updated in the keyboard profile and on the device |
 | `resense keyboard static ...` | Set selected static zones | Four-zone static state and unchanged fields are preserved |
-| `resense keyboard dynamic <mode> ...` | Set effect parameters | Effect, speed, direction, color, and brightness are read back |
+| `resense keyboard dynamic <mode> ...` | Set effect parameters | Effect, speed, and the parameters supported by that effect are read back |
 | `resense keyboard timeout enable|disable` | Set keyboard timeout | Timeout state is read back |
 | `resense keyboard sticky enable|disable` | Set Sticky Keys | Current Windows session is read back |
 | `resense keyboard win-menu enable|disable` | Set Windows/Menu lock | Live lock state is read back |
@@ -51,7 +51,7 @@ Record protocol details in [protocol.md](protocol.md) only when a change affects
 
 ## Minimum Hardware Matrix
 
-- Fans: telemetry, auto, max, mixed custom control, and saved custom percentages.
+- Fans: telemetry, auto, max, mixed custom control, and automatic-control percentage preservation.
 - Keyboard: static and dynamic lighting, brightness, zones, effects, direction, speed, color, and timeout.
 - Display: overdrive enable and disable.
 - Modes: quiet, default, performance, and WhisperMode behavior when available.

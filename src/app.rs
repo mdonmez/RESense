@@ -1,6 +1,6 @@
 use crate::cli::{
-    Cli, Commands, Direction as CliDirection, FanCommands, KeyboardCommands, KeyboardDynamicMode,
-    StatusTarget,
+    Cli, Commands, Direction as CliDirection, FanCommands, KeyboardCommands,
+    KeyboardDynamicCommands, StatusTarget,
 };
 use crate::device::{
     Brightness, Device, Direction, DynamicMode, DynamicRequest, DynamicSpeed, FanChange,
@@ -50,9 +50,9 @@ fn run_hardware_command(device: Device, command: Commands) -> Result<()> {
             KeyboardCommands::Static(args) => {
                 output::print_keyboard_state(device.set_keyboard_static(static_request(args)?)?)
             }
-            KeyboardCommands::Dynamic(args) => {
-                output::print_keyboard_state(device.set_keyboard_dynamic(dynamic_request(args)?)?)
-            }
+            KeyboardCommands::Dynamic(args) => output::print_keyboard_state(
+                device.set_keyboard_dynamic(dynamic_request(args.command)?)?,
+            ),
             KeyboardCommands::Sticky(args) => {
                 output::print_keyboard_state(device.set_sticky_keys(args.state.enabled())?)
             }
@@ -133,23 +133,41 @@ fn zone_change(value: Option<&str>) -> Result<Option<ZoneChange>> {
     }
 }
 
-fn dynamic_request(args: crate::cli::KeyboardDynamicArgs) -> Result<DynamicRequest> {
-    DynamicRequest::new(
-        dynamic_mode(args.mode),
-        args.speed.map(DynamicSpeed::new).transpose()?,
-        args.color.as_deref().map(Rgb::parse).transpose()?,
-        args.direction.map(direction),
-    )
+fn dynamic_request(command: KeyboardDynamicCommands) -> Result<DynamicRequest> {
+    match command {
+        KeyboardDynamicCommands::Breathing(args) => {
+            dynamic_request_from_args(DynamicMode::Breathing, args.speed, Some(args.color), None)
+        }
+        KeyboardDynamicCommands::Neon(args) => {
+            dynamic_request_from_args(DynamicMode::Neon, args.speed, None, None)
+        }
+        KeyboardDynamicCommands::Shifting(args) => dynamic_request_from_args(
+            DynamicMode::Shifting,
+            args.speed,
+            Some(args.color),
+            Some(args.direction),
+        ),
+        KeyboardDynamicCommands::Wave(args) => {
+            dynamic_request_from_args(DynamicMode::Wave, args.speed, None, Some(args.direction))
+        }
+        KeyboardDynamicCommands::Zoom(args) => {
+            dynamic_request_from_args(DynamicMode::Zoom, args.speed, Some(args.color), None)
+        }
+    }
 }
 
-fn dynamic_mode(mode: KeyboardDynamicMode) -> DynamicMode {
-    match mode {
-        KeyboardDynamicMode::Breathing => DynamicMode::Breathing,
-        KeyboardDynamicMode::Neon => DynamicMode::Neon,
-        KeyboardDynamicMode::Shifting => DynamicMode::Shifting,
-        KeyboardDynamicMode::Wave => DynamicMode::Wave,
-        KeyboardDynamicMode::Zoom => DynamicMode::Zoom,
-    }
+fn dynamic_request_from_args(
+    mode: DynamicMode,
+    speed: u8,
+    color: Option<String>,
+    direction_value: Option<CliDirection>,
+) -> Result<DynamicRequest> {
+    DynamicRequest::new(
+        mode,
+        DynamicSpeed::new(speed)?,
+        color.as_deref().map(Rgb::parse).transpose()?,
+        direction_value.map(direction),
+    )
 }
 
 fn direction(value: CliDirection) -> Direction {

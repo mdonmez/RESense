@@ -68,9 +68,9 @@ resense status --watch --interval 2
 
 After a mutation, use the command's verified output or a focused status read to confirm the resulting state. Surface operational errors instead of guessing or substituting fallback values.
 
-Fan status uses one selector and fixed blocks. `fan.mode` is the global behavior currently applied. Live CPU and GPU telemetry is under `fan.cpu` and `fan.gpu`. The saved custom settings are always under `fan.custom.cpu` and `fan.custom.gpu`, with a stable `mode` and `percent` field. When `fan.mode` is `auto` or `max`, do not describe a saved custom percentage as currently applied. When `fan.mode` is `custom`, the corresponding custom settings are applied. For example, `fan.mode=auto` with `fan.custom.cpu.mode=manual` and `fan.custom.cpu.percent=100` means the CPU is currently automatic and `100` is the saved custom percentage for a later custom-mode selection.
+Fan status reports the behavior currently applied. `fan.mode` is `auto`, `max`, or `custom`, and live CPU and GPU telemetry is under `fan.cpu` and `fan.gpu`. `fan.settings.custom` appears only when `fan.mode=custom`. An automatic custom fan reports `mode=auto` without a percentage; a manual custom fan reports its current percentage. Never infer a manual override from an `auto` or `max` status.
 
-Keyboard lighting uses the same stable model. `keyboard.lighting.mode` selects the currently applied block. `keyboard.lighting.static` always contains the four static zones, and `keyboard.lighting.dynamic` always contains the saved dynamic effect settings. Do not move values between `active` and `stored` paths or describe the non-selected block as currently applied. Use the selector to interpret the fixed blocks.
+Keyboard lighting reports only the currently applied effect. `keyboard.lighting.mode` is `static`, `breathing`, `neon`, `shifting`, `wave`, or `zoom`, followed by the matching `keyboard.lighting.settings.<mode>` fields. Static lighting reports four zones, `wave` reports speed and direction, `neon` reports speed, and other effects report only their supported fields. Do not invent inactive or unsupported fields.
 
 ## Fans
 
@@ -80,7 +80,7 @@ resense fan max
 resense fan custom --cpu 70 --gpu-auto
 ```
 
-`custom` accepts `--cpu <0-100>`, `--gpu <0-100>`, `--cpu-auto`, and `--gpu-auto`. At least one fan option is required, and a fan cannot receive both a percentage and its automatic flag.
+`custom` requires one explicit selection for each fan. Use `--cpu <0-100>` or `--cpu-auto`, together with `--gpu <0-100>` or `--gpu-auto`. A fan cannot receive both a percentage and its automatic flag.
 
 ## Operation Mode
 
@@ -96,8 +96,8 @@ resense mode performance --skip-whispermode
 ```powershell
 resense keyboard brightness 5
 resense keyboard timeout disable
-resense keyboard static --zone1 FF0000 --zone2 off
-resense keyboard dynamic wave --speed 5 --color 00FFFF --direction from-left
+resense keyboard static --zone1 FF0000 --zone2 off --zone3 FF0000 --zone4 off
+resense keyboard dynamic wave --speed 5 --direction from-left
 resense keyboard sticky enable
 resense keyboard win-menu disable
 ```
@@ -136,7 +136,7 @@ Translate the user's intent into the smallest matching command, then verify the 
 "Reduce my keyboard brightness" -> resense keyboard brightness 2
 "Cool down my laptop"           -> resense fan custom --cpu 80 --gpu 80
 "Is my laptop overheating?"     -> resense status
-"Set the keyboard to red"       -> resense keyboard static --zone1 FF0000
+"Set the keyboard to red"       -> resense keyboard static --zone1 FF0000 --zone2 FF0000 --zone3 FF0000 --zone4 FF0000
 "Turn on LCD overdrive"         -> resense display overdrive enable
 "Set the sound for music"       -> resense sound music
 ```

@@ -30,7 +30,8 @@ struct FanJson {
     mode: FanMode,
     cpu: FanTelemetryJson,
     gpu: FanTelemetryJson,
-    custom: FanCustomJson,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<FanSettingsJson>,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,9 +47,15 @@ struct FanCustomJson {
 }
 
 #[derive(Debug, Serialize)]
+struct FanSettingsJson {
+    custom: FanCustomJson,
+}
+
+#[derive(Debug, Serialize)]
 struct FanCustomControlJson {
     mode: &'static str,
-    percent: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    percent: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,22 +70,35 @@ struct KeyboardJson {
 #[derive(Debug, Serialize)]
 struct LightingJson {
     mode: &'static str,
-    #[serde(rename = "static")]
-    static_config: StaticLightingJson,
-    dynamic: DynamicLightingJson,
+    settings: LightingSettingsJson,
 }
 
 #[derive(Debug, Serialize)]
-struct StaticLightingJson {
-    zones: [ZoneJson; 4],
-}
-
-#[derive(Debug, Serialize)]
-struct DynamicLightingJson {
-    effect: &'static str,
-    color: Option<Rgb>,
-    speed: u8,
-    direction: Option<Direction>,
+#[serde(rename_all = "snake_case")]
+enum LightingSettingsJson {
+    Static {
+        zones: [ZoneJson; 4],
+    },
+    Breathing {
+        color: Rgb,
+        speed: u8,
+    },
+    Neon {
+        speed: u8,
+    },
+    Shifting {
+        color: Rgb,
+        speed: u8,
+        direction: Direction,
+    },
+    Wave {
+        speed: u8,
+        direction: Direction,
+    },
+    Zoom {
+        color: Rgb,
+        speed: u8,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -200,8 +220,10 @@ fn render_fan(output: &mut String, state: &FanState) {
     writeln!(output, "fan.mode={}", fan_mode_name(state.mode)).unwrap();
     render_fan_telemetry(output, "fan.cpu", &state.cpu);
     render_fan_telemetry(output, "fan.gpu", &state.gpu);
-    render_fan_custom(output, "fan.custom.cpu", state.custom.cpu);
-    render_fan_custom(output, "fan.custom.gpu", state.custom.gpu);
+    if state.mode == FanMode::Custom {
+        render_fan_custom(output, "fan.settings.custom.cpu", state.custom.cpu);
+        render_fan_custom(output, "fan.settings.custom.gpu", state.custom.gpu);
+    }
 }
 
 fn render_fan_telemetry(output: &mut String, prefix: &str, channel: &crate::device::FanTelemetry) {
@@ -211,7 +233,9 @@ fn render_fan_telemetry(output: &mut String, prefix: &str, channel: &crate::devi
 
 fn render_fan_custom(output: &mut String, prefix: &str, control: FanCustomControl) {
     writeln!(output, "{prefix}.mode={}", control.mode_name()).unwrap();
-    writeln!(output, "{prefix}.percent={}", control.percent().get()).unwrap();
+    if let FanCustomControl::Manual { percent } = control {
+        writeln!(output, "{prefix}.percent={}", percent.get()).unwrap();
+    }
 }
 
 fn render_keyboard_text(state: &KeyboardState) -> String {
@@ -222,18 +246,25 @@ fn render_keyboard_text(state: &KeyboardState) -> String {
 
 fn render_keyboard(output: &mut String, state: &KeyboardState) {
     writeln!(output, "keyboard.brightness={}", state.brightness.get()).unwrap();
-    writeln!(
-        output,
-        "keyboard.lighting.mode={}",
-        lighting_mode_name(state.lighting.mode)
-    )
-    .unwrap();
-    render_zones(
-        output,
-        "keyboard.lighting.static",
-        &state.lighting.static_zones,
-    );
-    render_dynamic_lighting(output, "keyboard.lighting.dynamic", state.lighting.dynamic);
+    match state.lighting.mode {
+        LightingMode::Static => {
+            writeln!(output, "keyboard.lighting.mode=static").unwrap();
+            render_zones(
+                output,
+                "keyboard.lighting.settings.static.zones",
+                &state.lighting.static_zones,
+            );
+        }
+        LightingMode::Dynamic => {
+            let effect = dynamic_effect_name(state.lighting.dynamic.effect);
+            writeln!(output, "keyboard.lighting.mode={effect}").unwrap();
+            render_dynamic_lighting(
+                output,
+                &format!("keyboard.lighting.settings.{effect}"),
+                state.lighting.dynamic,
+            );
+        }
+    }
     writeln!(
         output,
         "keyboard.backlight_timeout={}",
@@ -246,30 +277,34 @@ fn render_keyboard(output: &mut String, state: &KeyboardState) {
 
 fn render_zones(output: &mut String, prefix: &str, zones: &[crate::device::Zone; 4]) {
     for (index, zone) in zones.iter().enumerate() {
-        writeln!(
-            output,
-            "{prefix}.zone{}.enabled={}",
-            index + 1,
-            zone.enabled
-        )
-        .unwrap();
-        writeln!(output, "{prefix}.zone{}.color={}", index + 1, zone.color).unwrap();
+        writeln!(output, "{prefix}[{}].enabled={}", index + 1, zone.enabled).unwrap();
+        writeln!(output, "{prefix}[{}].color={}", index + 1, zone.color).unwrap();
     }
 }
 
 fn render_dynamic_lighting(output: &mut String, prefix: &str, lighting: DynamicLighting) {
-    let (name, color, direction) = dynamic_effect_text(lighting.effect);
-    writeln!(output, "{prefix}.effect={name}").unwrap();
-    writeln!(
-        output,
-        "{prefix}.color={}",
-        color
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "null".to_string())
-    )
-    .unwrap();
-    writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
-    writeln!(output, "{prefix}.direction={}", direction.unwrap_or("null")).unwrap();
+    match lighting.effect {
+        DynamicEffect::Breathing { color } => {
+            writeln!(output, "{prefix}.color={color}").unwrap();
+            writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+        }
+        DynamicEffect::Neon => {
+            writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+        }
+        DynamicEffect::Shifting { color, direction } => {
+            writeln!(output, "{prefix}.color={color}").unwrap();
+            writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+            writeln!(output, "{prefix}.direction={}", direction_name(direction)).unwrap();
+        }
+        DynamicEffect::Wave { direction } => {
+            writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+            writeln!(output, "{prefix}.direction={}", direction_name(direction)).unwrap();
+        }
+        DynamicEffect::Zoom { color } => {
+            writeln!(output, "{prefix}.color={color}").unwrap();
+            writeln!(output, "{prefix}.speed={}", lighting.speed.get()).unwrap();
+        }
+    }
 }
 
 fn status_json(state: &SystemState) -> StatusJson {
@@ -287,10 +322,12 @@ fn fan_json(state: &FanState) -> FanJson {
         mode: state.mode,
         cpu: fan_telemetry_json(&state.cpu),
         gpu: fan_telemetry_json(&state.gpu),
-        custom: FanCustomJson {
-            cpu: fan_custom_control_json(state.custom.cpu),
-            gpu: fan_custom_control_json(state.custom.gpu),
-        },
+        settings: (state.mode == FanMode::Custom).then(|| FanSettingsJson {
+            custom: FanCustomJson {
+                cpu: fan_custom_control_json(state.custom.cpu),
+                gpu: fan_custom_control_json(state.custom.gpu),
+            },
+        }),
     }
 }
 
@@ -303,13 +340,13 @@ fn fan_telemetry_json(channel: &crate::device::FanTelemetry) -> FanTelemetryJson
 
 fn fan_custom_control_json(control: FanCustomControl) -> FanCustomControlJson {
     match control {
-        FanCustomControl::Auto { percent } => FanCustomControlJson {
+        FanCustomControl::Auto { .. } => FanCustomControlJson {
             mode: "auto",
-            percent: percent.get(),
+            percent: None,
         },
         FanCustomControl::Manual { percent } => FanCustomControlJson {
             mode: "manual",
-            percent: percent.get(),
+            percent: Some(percent.get()),
         },
     }
 }
@@ -318,14 +355,8 @@ fn keyboard_json(state: &KeyboardState) -> KeyboardJson {
     KeyboardJson {
         brightness: state.brightness.get(),
         lighting: LightingJson {
-            mode: lighting_mode_name(state.lighting.mode),
-            static_config: StaticLightingJson {
-                zones: state.lighting.static_zones.map(|zone| ZoneJson {
-                    enabled: zone.enabled,
-                    color: zone.color,
-                }),
-            },
-            dynamic: dynamic_lighting_json(state.lighting.dynamic),
+            mode: active_lighting_mode_name(state),
+            settings: lighting_settings_json(state),
         },
         backlight_timeout: state.backlight_timeout,
         sticky_keys: state.sticky_keys,
@@ -333,37 +364,53 @@ fn keyboard_json(state: &KeyboardState) -> KeyboardJson {
     }
 }
 
-fn dynamic_lighting_json(lighting: DynamicLighting) -> DynamicLightingJson {
-    let (effect, color, direction) = dynamic_effect_json(lighting.effect);
-    DynamicLightingJson {
-        effect,
-        color,
-        speed: lighting.speed.get(),
-        direction,
+fn lighting_settings_json(state: &KeyboardState) -> LightingSettingsJson {
+    match state.lighting.mode {
+        LightingMode::Static => LightingSettingsJson::Static {
+            zones: state.lighting.static_zones.map(|zone| ZoneJson {
+                enabled: zone.enabled,
+                color: zone.color,
+            }),
+        },
+        LightingMode::Dynamic => match state.lighting.dynamic.effect {
+            DynamicEffect::Breathing { color } => LightingSettingsJson::Breathing {
+                color,
+                speed: state.lighting.dynamic.speed.get(),
+            },
+            DynamicEffect::Neon => LightingSettingsJson::Neon {
+                speed: state.lighting.dynamic.speed.get(),
+            },
+            DynamicEffect::Shifting { color, direction } => LightingSettingsJson::Shifting {
+                color,
+                speed: state.lighting.dynamic.speed.get(),
+                direction,
+            },
+            DynamicEffect::Wave { direction } => LightingSettingsJson::Wave {
+                speed: state.lighting.dynamic.speed.get(),
+                direction,
+            },
+            DynamicEffect::Zoom { color } => LightingSettingsJson::Zoom {
+                color,
+                speed: state.lighting.dynamic.speed.get(),
+            },
+        },
     }
 }
 
-fn dynamic_effect_json(effect: DynamicEffect) -> (&'static str, Option<Rgb>, Option<Direction>) {
-    match effect {
-        DynamicEffect::Breathing { color } => ("breathing", Some(color), None),
-        DynamicEffect::Neon => ("neon", None, None),
-        DynamicEffect::Shifting { color, direction } => ("shifting", Some(color), Some(direction)),
-        DynamicEffect::Wave { color, direction } => ("wave", Some(color), Some(direction)),
-        DynamicEffect::Zoom { color } => ("zoom", Some(color), None),
+fn active_lighting_mode_name(state: &KeyboardState) -> &'static str {
+    match state.lighting.mode {
+        LightingMode::Static => "static",
+        LightingMode::Dynamic => dynamic_effect_name(state.lighting.dynamic.effect),
     }
 }
 
-fn dynamic_effect_text(effect: DynamicEffect) -> (&'static str, Option<Rgb>, Option<&'static str>) {
+fn dynamic_effect_name(effect: DynamicEffect) -> &'static str {
     match effect {
-        DynamicEffect::Breathing { color } => ("breathing", Some(color), None),
-        DynamicEffect::Neon => ("neon", None, None),
-        DynamicEffect::Shifting { color, direction } => {
-            ("shifting", Some(color), Some(direction_name(direction)))
-        }
-        DynamicEffect::Wave { color, direction } => {
-            ("wave", Some(color), Some(direction_name(direction)))
-        }
-        DynamicEffect::Zoom { color } => ("zoom", Some(color), None),
+        DynamicEffect::Breathing { .. } => "breathing",
+        DynamicEffect::Neon => "neon",
+        DynamicEffect::Shifting { .. } => "shifting",
+        DynamicEffect::Wave { .. } => "wave",
+        DynamicEffect::Zoom { .. } => "zoom",
     }
 }
 
@@ -387,13 +434,6 @@ fn fan_mode_name(mode: FanMode) -> &'static str {
         FanMode::Auto => "auto",
         FanMode::Max => "max",
         FanMode::Custom => "custom",
-    }
-}
-
-fn lighting_mode_name(mode: LightingMode) -> &'static str {
-    match mode {
-        LightingMode::Static => "static",
-        LightingMode::Dynamic => "dynamic",
     }
 }
 
@@ -479,7 +519,6 @@ mod tests {
                     ],
                     dynamic: DynamicLighting {
                         effect: DynamicEffect::Wave {
-                            color: Rgb::parse("00FFFF").unwrap(),
                             direction: Direction::FromLeft,
                         },
                         speed: DynamicSpeed::new(3).unwrap(),
@@ -496,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn fan_text_uses_stable_selector_and_custom_paths() {
+    fn fan_text_renders_only_active_custom_settings() {
         let output = render_text(StatusValue::Fan(sample_state().fan));
         assert_eq!(
             output,
@@ -505,51 +544,107 @@ fan.cpu.temperature_c=60\n\
 fan.cpu.rpm=2400\n\
 fan.gpu.temperature_c=45\n\
 fan.gpu.rpm=2300\n\
-fan.custom.cpu.mode=manual\n\
-fan.custom.cpu.percent=70\n\
-fan.custom.gpu.mode=auto\n\
-fan.custom.gpu.percent=50\n"
+fan.settings.custom.cpu.mode=manual\n\
+fan.settings.custom.cpu.percent=70\n\
+fan.settings.custom.gpu.mode=auto\n"
         );
     }
 
     #[test]
-    fn keyboard_text_contains_both_lighting_blocks() {
+    fn keyboard_text_renders_only_active_static_settings() {
         let output = render_text(StatusValue::Keyboard(sample_state().keyboard));
         assert!(output.contains("keyboard.lighting.mode=static\n"));
-        assert!(output.contains("keyboard.lighting.static.zone1.enabled=true\n"));
-        assert!(output.contains("keyboard.lighting.static.zone4.color=#FFFFFF\n"));
-        assert!(output.contains("keyboard.lighting.dynamic.effect=wave\n"));
-        assert!(output.contains("keyboard.lighting.dynamic.color=#00FFFF\n"));
-        assert!(output.contains("keyboard.lighting.dynamic.speed=3\n"));
-        assert!(output.contains("keyboard.lighting.dynamic.direction=fromleft\n"));
-        assert!(!output.contains("keyboard.lighting.zone1."));
+        assert!(output.contains("keyboard.lighting.settings.static.zones[1].enabled=true\n"));
+        assert!(output.contains("keyboard.lighting.settings.static.zones[4].color=#FFFFFF\n"));
+        assert!(!output.contains("keyboard.lighting.mode=dynamic\n"));
+        assert!(!output.contains("keyboard.lighting.settings.wave"));
+        assert!(!output.contains("keyboard.lighting.static"));
+        assert!(!output.contains("keyboard.lighting.dynamic"));
     }
 
     #[test]
-    fn full_json_uses_stable_mode_scoped_paths() {
+    fn keyboard_text_renders_active_wave_settings_without_color() {
+        let mut state = sample_state().keyboard;
+        state.lighting.mode = LightingMode::Dynamic;
+        let output = render_text(StatusValue::Keyboard(state));
+        assert!(output.contains("keyboard.lighting.mode=wave\n"));
+        assert!(output.contains("keyboard.lighting.settings.wave.speed=3\n"));
+        assert!(output.contains("keyboard.lighting.settings.wave.direction=fromleft\n"));
+        assert!(!output.contains("keyboard.lighting.settings.wave.color"));
+        assert!(!output.contains("keyboard.lighting.settings.static"));
+    }
+
+    fn dynamic_text(effect: DynamicEffect) -> String {
+        let mut state = sample_state().keyboard;
+        state.lighting.mode = LightingMode::Dynamic;
+        state.lighting.dynamic.effect = effect;
+        render_text(StatusValue::Keyboard(state))
+    }
+
+    #[test]
+    fn dynamic_text_uses_only_effect_supported_fields() {
+        let breathing = dynamic_text(DynamicEffect::Breathing {
+            color: Rgb::parse("FF0000").unwrap(),
+        });
+        assert!(breathing.contains("keyboard.lighting.mode=breathing\n"));
+        assert!(breathing.contains("keyboard.lighting.settings.breathing.color=#FF0000\n"));
+        assert!(breathing.contains("keyboard.lighting.settings.breathing.speed=3\n"));
+        assert!(!breathing.contains("direction"));
+
+        let neon = dynamic_text(DynamicEffect::Neon);
+        assert!(neon.contains("keyboard.lighting.mode=neon\n"));
+        assert!(neon.contains("keyboard.lighting.settings.neon.speed=3\n"));
+        assert!(!neon.contains(".color="));
+        assert!(!neon.contains(".direction="));
+
+        let shifting = dynamic_text(DynamicEffect::Shifting {
+            color: Rgb::parse("00FF00").unwrap(),
+            direction: Direction::FromRight,
+        });
+        assert!(shifting.contains("keyboard.lighting.mode=shifting\n"));
+        assert!(shifting.contains("keyboard.lighting.settings.shifting.color=#00FF00\n"));
+        assert!(shifting.contains("keyboard.lighting.settings.shifting.direction=fromright\n"));
+
+        let zoom = dynamic_text(DynamicEffect::Zoom {
+            color: Rgb::parse("0000FF").unwrap(),
+        });
+        assert!(zoom.contains("keyboard.lighting.mode=zoom\n"));
+        assert!(zoom.contains("keyboard.lighting.settings.zoom.color=#0000FF\n"));
+        assert!(!zoom.contains("direction"));
+    }
+
+    #[test]
+    fn full_json_contains_only_active_mode_scoped_paths() {
         let value = serde_json::from_str::<serde_json::Value>(
             &all_json(StatusValue::All(sample_state()), false).unwrap(),
         )
         .unwrap();
-        assert_eq!(value["fan"]["custom"]["cpu"]["mode"], "manual");
-        assert_eq!(value["fan"]["custom"]["cpu"]["percent"], 70);
-        assert_eq!(value["fan"]["custom"]["gpu"]["mode"], "auto");
-        assert_eq!(value["fan"]["custom"]["gpu"]["percent"], 50);
+        assert_eq!(value["fan"]["settings"]["custom"]["cpu"]["mode"], "manual");
+        assert_eq!(value["fan"]["settings"]["custom"]["cpu"]["percent"], 70);
+        assert_eq!(value["fan"]["settings"]["custom"]["gpu"]["mode"], "auto");
+        assert!(
+            value["fan"]["settings"]["custom"]["gpu"]
+                .get("percent")
+                .is_none()
+        );
+        assert!(value["fan"].get("custom").is_none());
         assert!(value["fan"]["cpu"].get("control").is_none());
         assert!(value["fan"]["cpu"].get("effective_control").is_none());
         assert_eq!(
-            value["keyboard"]["lighting"]["static"]["zones"]
+            value["keyboard"]["lighting"]["settings"]["static"]["zones"]
                 .as_array()
                 .unwrap()
                 .len(),
             4
         );
-        assert_eq!(value["keyboard"]["lighting"]["dynamic"]["effect"], "wave");
-        assert_eq!(
-            value["keyboard"]["lighting"]["dynamic"]["direction"],
-            "from_left"
+        assert_eq!(value["keyboard"]["lighting"]["mode"], "static");
+        assert!(
+            value["keyboard"]["lighting"]["settings"]
+                .get("wave")
+                .is_none()
         );
-        assert!(value["keyboard"]["lighting"].get("zones").is_none());
+        assert!(value["keyboard"]["lighting"].get("static").is_none());
+        assert!(value["keyboard"]["lighting"].get("dynamic").is_none());
         assert_eq!(value["mode"], "performance");
         assert!(value.get("trust").is_none());
         assert!(value.get("reliability").is_none());
@@ -580,7 +675,7 @@ fan.custom.gpu.percent=50\n"
     }
 
     #[test]
-    fn selector_explains_which_fan_block_is_applied() {
+    fn inactive_fan_settings_are_not_rendered() {
         let mut state = sample_state();
         state.fan.mode = FanMode::Auto;
 
@@ -589,8 +684,25 @@ fan.custom.gpu.percent=50\n"
         )
         .unwrap();
         assert_eq!(value["fan"]["mode"], "auto");
-        assert_eq!(value["fan"]["custom"]["cpu"]["mode"], "manual");
-        assert_eq!(value["fan"]["custom"]["cpu"]["percent"], 70);
-        assert_eq!(value["fan"]["custom"]["gpu"]["mode"], "auto");
+        assert!(value["fan"].get("settings").is_none());
+        assert!(value["fan"].get("custom").is_none());
+    }
+
+    #[test]
+    fn dynamic_json_uses_effect_specific_settings() {
+        let mut state = sample_state();
+        state.keyboard.lighting.mode = LightingMode::Dynamic;
+        let value = serde_json::from_str::<serde_json::Value>(
+            &target_json(StatusValue::Keyboard(state.keyboard), false).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["lighting"]["mode"], "wave");
+        assert_eq!(value["lighting"]["settings"]["wave"]["speed"], 3);
+        assert_eq!(
+            value["lighting"]["settings"]["wave"]["direction"],
+            "from_left"
+        );
+        assert!(value["lighting"]["settings"]["wave"].get("color").is_none());
+        assert!(value["lighting"]["settings"].get("static").is_none());
     }
 }
