@@ -232,7 +232,7 @@ $targetExecutable = __TARGET_EXECUTABLE__
 $parentProcessId = __PARENT_PROCESS_ID__
 
 try {
-    $installerResponse = irm 'git.new/resense' -TimeoutSec 30
+    $installerResponse = Invoke-RestMethod -UseBasicParsing -Uri 'https://git.new/resense' -TimeoutSec 30
     if ($installerResponse -is [byte[]]) {
         $installerText = [System.Text.Encoding]::UTF8.GetString($installerResponse)
     }
@@ -357,7 +357,9 @@ mod tests {
         assert!(script.contains("-TargetExecutable"));
         assert!(script.contains(r"'C:\Tools\resense.exe'"));
         assert!(script.contains("$parentProcessId = 42"));
-        assert!(script.contains("irm 'git.new/resense'"));
+        assert!(
+            script.contains("Invoke-RestMethod -UseBasicParsing -Uri 'https://git.new/resense'")
+        );
         assert!(script.contains("[scriptblock]::Create"));
         assert!(script.contains("-UpdateSkillIfPresent"));
         assert!(!script.contains("Get-Sha256Hex"));
