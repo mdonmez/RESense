@@ -216,11 +216,13 @@ jobs:
           }
           if ($renderedInstaller -notmatch '\[switch\]\$YesSkill' -or
               $renderedInstaller -notmatch '\[switch\]\$NoSkill' -or
-              $renderedInstaller -notmatch '\[switch\]\$UpdateSkillIfPresent') {
-            throw "The rendered installer must expose the expected skill policy switches."
+              $renderedInstaller -notmatch '\[string\]\$StageBinaryPath' -or
+              $renderedInstaller -notmatch '\[string\]\$StageSkillPath' -or
+              $renderedInstaller -notmatch '\[string\]\$CommitSkillPath') {
+            throw "The rendered installer must expose the expected installation and staging parameters."
           }
-          if ($renderedInstaller -match '\[System\.IO\.File\]::Replace\(\$TargetStagePath, \$TargetExecutable, \$null') {
-            throw "The rendered installer must use an atomic executable replacement backup."
+          if ($renderedInstaller -match 'TargetExecutable|ParentProcessId|UpdateSkillIfPresent|BinaryUpdate|git\.new') {
+            throw "The rendered installer contains removed update handoff logic."
           }
           [void][scriptblock]::Create($renderedInstaller)
           [void][scriptblock]::Create((Get-Content -LiteralPath $uninstallerPath -Raw))

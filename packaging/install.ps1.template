@@ -1,29 +1,50 @@
 #requires -Version 5.1
 
 param(
-    [string]$TargetExecutable,
-    [int]$ParentProcessId = 0,
+    [string]$StageBinaryPath,
+    [string]$StageSkillPath,
+    [string]$CommitSkillPath,
     [switch]$YesSkill,
-    [switch]$NoSkill,
-    [switch]$UpdateSkillIfPresent
+    [switch]$NoSkill
 )
 
 $ErrorActionPreference = "Stop"
 
-$BinaryUpdate = -not [string]::IsNullOrWhiteSpace($TargetExecutable)
-$TargetStagePath = $null
-$TargetBackupPath = $null
-if ($BinaryUpdate) {
-    if ($ParentProcessId -le 0) {
-        throw "Binary update mode requires a valid parent process ID."
+$StageBinaryMode = -not [string]::IsNullOrWhiteSpace($StageBinaryPath)
+$StageSkillMode = -not [string]::IsNullOrWhiteSpace($StageSkillPath)
+$CommitSkillMode = -not [string]::IsNullOrWhiteSpace($CommitSkillPath)
+$InternalMode = $StageBinaryMode -or $StageSkillMode -or $CommitSkillMode
+
+if ($StageSkillMode -and -not $StageBinaryMode) {
+    throw "-StageSkillPath requires -StageBinaryPath."
+}
+if (($StageBinaryMode -or $StageSkillMode) -and $CommitSkillMode) {
+    throw "Staging and skill commit modes cannot be combined."
+}
+if ($InternalMode -and ($YesSkill -or $NoSkill)) {
+    throw "-YesSkill and -NoSkill are only valid for normal installation."
+}
+if ($YesSkill -and $NoSkill) {
+    throw "Choose only one of -YesSkill or -NoSkill."
+}
+
+if ($StageBinaryMode) {
+    $StageBinaryPath = [System.IO.Path]::GetFullPath($StageBinaryPath)
+    if ([System.IO.Path]::GetFileName($StageBinaryPath) -ne "resense.exe") {
+        throw "-StageBinaryPath must point to a file named resense.exe."
     }
-    $TargetExecutable = [System.IO.Path]::GetFullPath($TargetExecutable)
-    if (-not (Test-Path -LiteralPath $TargetExecutable -PathType Leaf)) {
-        throw "The target executable '$TargetExecutable' does not exist."
+}
+if ($StageSkillMode) {
+    $StageSkillPath = [System.IO.Path]::GetFullPath($StageSkillPath)
+    if ([System.IO.Path]::GetFileName($StageSkillPath) -ne "SKILL.md") {
+        throw "-StageSkillPath must point to a file named SKILL.md."
     }
-    $targetDirectory = Split-Path -Parent $TargetExecutable
-    $TargetStagePath = Join-Path $targetDirectory (".resense-update-" + [guid]::NewGuid().ToString("N") + ".exe")
-    $TargetBackupPath = Join-Path $targetDirectory (".resense-update-" + [guid]::NewGuid().ToString("N") + ".bak")
+}
+if ($CommitSkillMode) {
+    $CommitSkillPath = [System.IO.Path]::GetFullPath($CommitSkillPath)
+    if ([System.IO.Path]::GetFileName($CommitSkillPath) -ne "SKILL.md") {
+        throw "-CommitSkillPath must point to a file named SKILL.md."
+    }
 }
 
 $Repository = "mdonmez/RESense"
@@ -39,15 +60,6 @@ $StagePath = Join-Path $TemporaryRoot "stage"
 $SkillInstallPath = Join-Path $HOME ".agents\skills\resense\SKILL.md"
 $BaseUrl = "https://github.com/$Repository/releases/download/$ReleaseTag"
 
-if (($YesSkill -and $NoSkill) -or
-    ($YesSkill -and $UpdateSkillIfPresent) -or
-    ($NoSkill -and $UpdateSkillIfPresent)) {
-    throw "Choose only one of -YesSkill, -NoSkill, or -UpdateSkillIfPresent."
-}
-if ($UpdateSkillIfPresent -and -not $BinaryUpdate) {
-    throw "-UpdateSkillIfPresent is only valid for a binary update."
-}
-
 function Test-InteractiveSession {
     try {
         return $null -ne $Host.UI -and $null -ne $Host.UI.RawUI -and -not [Console]::IsInputRedirected
@@ -58,9 +70,6 @@ function Test-InteractiveSession {
 }
 
 function Resolve-SkillInstall {
-    if ($UpdateSkillIfPresent) {
-        return Test-Path -LiteralPath $SkillInstallPath -PathType Leaf
-    }
     if ($YesSkill) {
         return $true
     }
@@ -74,8 +83,6 @@ function Resolve-SkillInstall {
     $answer = Read-Host "Install the RESense agent skill? [Y/n]"
     return [string]::IsNullOrWhiteSpace($answer) -or $answer -notmatch '^(n|no)$'
 }
-
-$InstallSkill = Resolve-SkillInstall
 
 function Get-ExpectedChecksum {
     param(
@@ -147,6 +154,10 @@ function Install-Skill {
         [string]$SourcePath
     )
 
+    if (-not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
+        throw "The RESense skill source '$SourcePath' does not exist."
+    }
+
     $skillDirectory = Split-Path -Parent $SkillInstallPath
     $skillStagePath = Join-Path $skillDirectory (".SKILL.md." + [guid]::NewGuid().ToString("N") + ".tmp")
     $skillBackupPath = Join-Path $skillDirectory (".SKILL.md." + [guid]::NewGuid().ToString("N") + ".bak")
@@ -173,29 +184,29 @@ function Install-Skill {
     }
 }
 
+$InstallSkill = $false
+if ($StageSkillMode) {
+    $InstallSkill = $true
+}
+elseif (-not $InternalMode) {
+    $InstallSkill = Resolve-SkillInstall
+}
+
 try {
-    if (-not $BinaryUpdate) {
+    if ($CommitSkillMode) {
+        Install-Skill -SourcePath $CommitSkillPath
+        Write-Output "RESense skill $Version installed at $SkillInstallPath."
+        return
+    }
+
+    if (-not $InternalMode) {
         $running = @(Get-Process -Name "resense" -ErrorAction SilentlyContinue)
         if ($running.Count -gt 0) {
-            throw "Close any running resense.exe process before updating RESense."
+            throw "Close any running resense.exe process before installing or updating RESense."
         }
     }
 
     New-Item -ItemType Directory -Force -Path $DownloadRoot, $ExtractRoot, $StagePath | Out-Null
-
-    if ($BinaryUpdate) {
-        $waitDeadline = (Get-Date).AddSeconds(60)
-        while ($true) {
-            $parent = Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
-            if ($null -eq $parent) {
-                break
-            }
-            if ((Get-Date) -ge $waitDeadline) {
-                throw "The original RESense process did not exit within 60 seconds."
-            }
-            Start-Sleep -Milliseconds 100
-        }
-    }
 
     $packagePath = Join-Path $DownloadRoot $PackageName
     $checksumsPath = Join-Path $DownloadRoot "SHA256SUMS.txt"
@@ -220,20 +231,15 @@ try {
         throw "The release archive must contain only resense.exe."
     }
 
-    if ($BinaryUpdate) {
-        Copy-Item -LiteralPath $executablePath -Destination $TargetStagePath -Force
-        try {
-            [System.IO.File]::Replace($TargetStagePath, $TargetExecutable, $TargetBackupPath, $true)
+    if ($StageBinaryMode) {
+        $stageBinaryParent = Split-Path -Parent $StageBinaryPath
+        New-Item -ItemType Directory -Force -Path $stageBinaryParent | Out-Null
+        Copy-Item -LiteralPath $executablePath -Destination $StageBinaryPath -Force
+        if ($StageSkillMode) {
+            $stageSkillParent = Split-Path -Parent $StageSkillPath
+            New-Item -ItemType Directory -Force -Path $stageSkillParent | Out-Null
+            Copy-Item -LiteralPath $skillDownloadPath -Destination $StageSkillPath -Force
         }
-        catch {
-            throw "Could not replace '$TargetExecutable'. Close processes using it and try again."
-        }
-
-        if ($InstallSkill) {
-            Install-Skill -SourcePath $skillDownloadPath
-            Write-Output "RESense skill $Version installed at $SkillInstallPath."
-        }
-        Write-Output "RESense updated at $TargetExecutable."
         return
     }
 
@@ -275,12 +281,6 @@ try {
     Write-Output "Open a new terminal, or run 'resense --help' in this session."
 }
 finally {
-    if ($TargetStagePath -and (Test-Path -LiteralPath $TargetStagePath)) {
-        Remove-Item -LiteralPath $TargetStagePath -Force -ErrorAction SilentlyContinue
-    }
-    if ($TargetBackupPath -and (Test-Path -LiteralPath $TargetBackupPath)) {
-        Remove-Item -LiteralPath $TargetBackupPath -Force -ErrorAction SilentlyContinue
-    }
     if (Test-Path -LiteralPath $TemporaryRoot) {
         Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
     }

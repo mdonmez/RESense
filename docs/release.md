@@ -70,10 +70,8 @@ The installer and uninstaller are user-scoped. The installer can install the mat
 
 `resense --version` reports the installed version and performs a fresh check for the latest published stable release. `resense update` uses the same source and does nothing when the installed version is current.
 
-When a newer release exists, the command starts a visible installer process using `irm git.new/resense`. The installer receives the exact running executable path and parent process ID, waits for RESense to exit, verifies the release ZIP, and replaces only that executable. It does not change PATH, install directories, services, registry settings, or neighboring files. This also supports portable, development, and custom executable locations.
+When a newer release exists, the command resolves one exact stable release tag and downloads the matching release installer and checksum file. The verified installer stages the release binary and, when the skill already exists, a matching `SKILL.md`. RESense then replaces only the exact running executable in the same command, so portable, development, and custom executable locations are supported without changing PATH, install directories, services, registry settings, or neighboring files.
 
-The update is noninteractive. If the skill already exists, the installer refreshes it from the same release. If it does not exist, the update leaves it absent.
-
-The existing executable is preserved when the release cannot be verified or the replacement is blocked. The updater reports the final download, verification, replacement, or failure result independently after the command hands it off.
+The binary replacement is completed before the skill is committed. A skill replacement failure does not roll back the binary; it is reported explicitly and makes the command fail. If release or checksum verification fails, the existing executable is preserved.
 
 Future release ZIPs contain only `resense.exe`; `SHA256SUMS.txt`, `install.ps1`, `uninstall.ps1`, and the version-matched `SKILL.md` remain separate release assets. The skill URL for a release is `https://github.com/mdonmez/RESense/releases/download/v{VERSION}/SKILL.md`.

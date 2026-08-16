@@ -3,13 +3,16 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use std::ffi::OsString;
 use std::fmt;
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
+const REPOSITORY: &str = "mdonmez/RESense";
 
 const LATEST_RELEASE_SCRIPT: &str = r#"
 $ErrorActionPreference = 'Stop'
@@ -84,6 +87,7 @@ struct ReleasePayload {
 #[derive(Debug)]
 struct LatestRelease {
     version: Version,
+    tag: String,
 }
 
 pub fn version_requested(args: &[OsString]) -> bool {
@@ -127,9 +131,50 @@ pub fn run_update() -> Result<()> {
     }
 
     println!("Update available: {}", latest.version);
-    handoff_update()?;
-    println!("Update handed off");
+    println!("Updating RESense...");
+
+    running_executable()?;
+    let existing_skill = existing_skill_path()?;
+    let temporary_root = create_update_directory()?;
+    let staged_binary = temporary_root.join("resense.exe");
+    let staged_skill = existing_skill
+        .as_ref()
+        .map(|_| temporary_root.join("SKILL.md"));
+    let installer_path = temporary_root.join("install.ps1");
+    let result = update_files(
+        &latest,
+        &temporary_root,
+        &installer_path,
+        &staged_binary,
+        staged_skill.as_deref(),
+    );
+
+    let cleanup_result = fs::remove_dir_all(&temporary_root);
+    let outcome = match result {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let _ = cleanup_result;
+            return Err(error);
+        }
+    };
+    cleanup_result.context("could not clean up the temporary update directory")?;
+
+    match outcome {
+        UpdateOutcome::Complete => {
+            println!("Updated RESense from {current} to {}", latest.version);
+        }
+        UpdateOutcome::SkillFailed(error) => {
+            println!("Updated RESense from {current} to {}", latest.version);
+            println!("Warning: RESense skill update failed");
+            return Err(error);
+        }
+    }
     Ok(())
+}
+
+enum UpdateOutcome {
+    Complete,
+    SkillFailed(anyhow::Error),
 }
 
 fn latest_release() -> Result<LatestRelease> {
@@ -144,10 +189,21 @@ fn parse_release(payload: &str) -> Result<LatestRelease> {
     }
 
     let version = Version::parse_tag(&release.tag_name)?;
-    Ok(LatestRelease { version })
+    Ok(LatestRelease {
+        version,
+        tag: release.tag_name,
+    })
 }
 
 fn run_powershell_capture(script: &str) -> Result<String> {
+    run_powershell_capture_with_timeout(script, CHECK_TIMEOUT, "version check")
+}
+
+fn run_powershell_capture_with_timeout(
+    script: &str,
+    timeout: Duration,
+    operation: &str,
+) -> Result<String> {
     let mut child = Command::new("powershell.exe")
         .args([
             "-NoLogo",
@@ -162,7 +218,7 @@ fn run_powershell_capture(script: &str) -> Result<String> {
         .stderr(Stdio::piped())
         .spawn()
         .context("PowerShell is unavailable")?;
-    let deadline = Instant::now() + CHECK_TIMEOUT;
+    let deadline = Instant::now() + timeout;
 
     loop {
         if child
@@ -187,31 +243,11 @@ fn run_powershell_capture(script: &str) -> Result<String> {
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
-            bail!("version check timed out after five seconds")
+            bail!("{operation} timed out")
         }
 
         thread::sleep(Duration::from_millis(25));
     }
-}
-
-fn handoff_update() -> Result<()> {
-    let target = running_executable()?;
-    let script = installer_handoff_script(&target, std::process::id());
-
-    Command::new("powershell.exe")
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &script,
-        ])
-        .spawn()
-        .context("could not start the updater; PowerShell is unavailable")?;
-
-    Ok(())
 }
 
 fn running_executable() -> Result<PathBuf> {
@@ -225,39 +261,212 @@ fn running_executable() -> Result<PathBuf> {
     Ok(target)
 }
 
-fn installer_handoff_script(target: &Path, parent_process_id: u32) -> String {
-    let script = r#"
+fn existing_skill_path() -> Result<Option<PathBuf>> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"));
+    let Some(home) = home else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(home)
+        .join(".agents")
+        .join("skills")
+        .join("resense")
+        .join("SKILL.md");
+    Ok(path.is_file().then_some(path))
+}
+
+fn create_update_directory() -> Result<PathBuf> {
+    let base = std::env::temp_dir();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system clock is before the Unix epoch")?
+        .as_nanos();
+    for attempt in 0..10 {
+        let path = base.join(format!(
+            "resense-update-{}-{timestamp}-{attempt}",
+            std::process::id()
+        ));
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "could not create temporary update directory {}",
+                        path.display()
+                    )
+                });
+            }
+        }
+    }
+    bail!("could not create a unique temporary update directory")
+}
+
+fn release_asset_url(tag: &str, asset: &str) -> String {
+    format!("https://github.com/{REPOSITORY}/releases/download/{tag}/{asset}")
+}
+
+fn update_files(
+    release: &LatestRelease,
+    temporary_root: &Path,
+    installer_path: &Path,
+    staged_binary: &Path,
+    staged_skill: Option<&Path>,
+) -> Result<UpdateOutcome> {
+    let script = staging_script(
+        release,
+        temporary_root,
+        installer_path,
+        staged_binary,
+        staged_skill,
+    );
+    run_powershell_capture_with_timeout(&script, UPDATE_TIMEOUT, "update staging")?;
+
+    if !staged_binary.is_file() {
+        bail!("the verified installer did not produce a staged resense.exe")
+    }
+
+    replace_running_executable(staged_binary)
+        .context("could not replace the running resense.exe")?;
+
+    if let Some(staged_skill) = staged_skill {
+        if !staged_skill.is_file() {
+            bail!("the verified installer did not produce a staged SKILL.md")
+        }
+        let script = skill_commit_script(installer_path, staged_skill);
+        if let Err(error) =
+            run_powershell_capture_with_timeout(&script, UPDATE_TIMEOUT, "skill update")
+        {
+            return Ok(UpdateOutcome::SkillFailed(error.context(
+                "the binary was updated, but the skill could not be updated",
+            )));
+        }
+    }
+
+    Ok(UpdateOutcome::Complete)
+}
+
+#[cfg(windows)]
+fn replace_running_executable(staged_binary: &Path) -> Result<()> {
+    self_replace::self_replace(staged_binary).context("self-replace failed")?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn replace_running_executable(_staged_binary: &Path) -> Result<()> {
+    bail!("self-update is supported only on Windows")
+}
+
+fn staging_script(
+    release: &LatestRelease,
+    temporary_root: &Path,
+    installer_path: &Path,
+    staged_binary: &Path,
+    staged_skill: Option<&Path>,
+) -> String {
+    let checksums_path = temporary_root.join("SHA256SUMS.txt");
+    let installer_url = release_asset_url(&release.tag, "install.ps1");
+    let checksums_url = release_asset_url(&release.tag, "SHA256SUMS.txt");
+    let stage_skill_argument = staged_skill
+        .map(|path| {
+            format!(
+                "\n    & $installerPath -StageBinaryPath {} -StageSkillPath {}",
+                powershell_literal(&staged_binary.to_string_lossy()),
+                powershell_literal(&path.to_string_lossy())
+            )
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "\n    & $installerPath -StageBinaryPath {}",
+                powershell_literal(&staged_binary.to_string_lossy())
+            )
+        });
+
+    r#"
 $ErrorActionPreference = 'Stop'
-$targetExecutable = __TARGET_EXECUTABLE__
-$parentProcessId = __PARENT_PROCESS_ID__
+$temporaryRoot = __TEMPORARY_ROOT__
+$installerPath = __INSTALLER_PATH__
+$checksumsPath = __CHECKSUMS_PATH__
+$installerUrl = __INSTALLER_URL__
+$checksumsUrl = __CHECKSUMS_URL__
+
+function Get-ExpectedChecksum {
+    param(
+        [Parameter(Mandatory = $true)][string]$ChecksumsFile,
+        [Parameter(Mandatory = $true)][string]$AssetName
+    )
+
+    $matches = @(Get-Content -LiteralPath $ChecksumsFile | Where-Object {
+        $parts = $_.Trim() -split "\s+", 2
+        $parts.Count -eq 2 -and $parts[1].Trim() -eq $AssetName
+    })
+    if ($matches.Count -ne 1) {
+        throw "SHA-256 entry for '$AssetName' was not found or was ambiguous."
+    }
+    return (($matches[0].Trim() -split "\s+", 2)[0]).ToUpperInvariant()
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$FilePath)
+    $algorithm = $null
+    $stream = $null
+    try {
+        $algorithm = [System.Security.Cryptography.SHA256]::Create()
+        $stream = [System.IO.File]::OpenRead($FilePath)
+        $hashBytes = $algorithm.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToUpperInvariant()
+    }
+    finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        if ($null -ne $algorithm) { $algorithm.Dispose() }
+    }
+}
 
 try {
-    $installerResponse = Invoke-RestMethod -UseBasicParsing -Uri 'https://git.new/resense' -TimeoutSec 30
-    if ($installerResponse -is [byte[]]) {
-        $installerText = [System.Text.Encoding]::UTF8.GetString($installerResponse)
+    New-Item -ItemType Directory -Force -Path $temporaryRoot | Out-Null
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri $installerUrl -OutFile $installerPath
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri $checksumsUrl -OutFile $checksumsPath
+    $expectedHash = Get-ExpectedChecksum -ChecksumsFile $checksumsPath -AssetName 'install.ps1'
+    $actualHash = Get-Sha256Hex -FilePath $installerPath
+    if ($actualHash -ne $expectedHash) {
+        throw 'SHA-256 verification failed for install.ps1.'
     }
-    else {
-        $installerText = [string]$installerResponse
-    }
-    if ([string]::IsNullOrWhiteSpace($installerText)) {
-        throw 'The latest installer was empty.'
-    }
-
-    $installer = [scriptblock]::Create($installerText)
-    & $installer -TargetExecutable $targetExecutable -ParentProcessId $parentProcessId -UpdateSkillIfPresent
+    __STAGE_ARGUMENTS__
 }
 catch {
-    Write-Error ('RESense update failed: ' + $_.Exception.Message)
-    exit 1
+    throw ('RESense update failed: ' + $_.Exception.Message)
 }
-"#;
+"#
+    .replace(
+        "__TEMPORARY_ROOT__",
+        &powershell_literal(&temporary_root.to_string_lossy()),
+    )
+    .replace(
+        "__INSTALLER_PATH__",
+        &powershell_literal(&installer_path.to_string_lossy()),
+    )
+    .replace(
+        "__CHECKSUMS_PATH__",
+        &powershell_literal(&checksums_path.to_string_lossy()),
+    )
+    .replace("__INSTALLER_URL__", &powershell_literal(&installer_url))
+    .replace("__CHECKSUMS_URL__", &powershell_literal(&checksums_url))
+    .replace("__STAGE_ARGUMENTS__", stage_skill_argument.trim_start())
+}
 
-    script
-        .replace(
-            "__TARGET_EXECUTABLE__",
-            &powershell_literal(&target.to_string_lossy()),
-        )
-        .replace("__PARENT_PROCESS_ID__", &parent_process_id.to_string())
+fn skill_commit_script(installer_path: &Path, staged_skill: &Path) -> String {
+    format!(
+        r#"
+$ErrorActionPreference = 'Stop'
+try {{
+    & {} -CommitSkillPath {}
+}}
+catch {{
+    throw ('RESense skill update failed: ' + $_.Exception.Message)
+}}
+"#,
+        powershell_literal(&installer_path.to_string_lossy()),
+        powershell_literal(&staged_skill.to_string_lossy())
+    )
 }
 
 fn powershell_literal(value: &str) -> String {
@@ -314,6 +523,7 @@ mod tests {
         let release =
             parse_release(r#"{"tag_name":"v1.2.3","draft":false,"prerelease":false}"#).unwrap();
         assert_eq!(release.version.to_string(), "1.2.3");
+        assert_eq!(release.tag, "v1.2.3");
 
         assert!(
             parse_release(r#"{"tag_name":"v1.2.4","draft":false,"prerelease":true}"#,).is_err()
@@ -351,30 +561,49 @@ mod tests {
     }
 
     #[test]
-    fn installer_handoff_targets_only_the_running_executable() {
-        let target = PathBuf::from(r"C:\Tools\resense.exe");
-        let script = installer_handoff_script(&target, 42);
-        assert!(script.contains("-TargetExecutable"));
-        assert!(script.contains(r"'C:\Tools\resense.exe'"));
-        assert!(script.contains("$parentProcessId = 42"));
-        assert!(
-            script.contains("Invoke-RestMethod -UseBasicParsing -Uri 'https://git.new/resense'")
+    fn creates_exact_release_asset_urls() {
+        assert_eq!(
+            release_asset_url("v1.2.3", "install.ps1"),
+            "https://github.com/mdonmez/RESense/releases/download/v1.2.3/install.ps1"
         );
-        assert!(script.contains("[scriptblock]::Create"));
-        assert!(script.contains("-UpdateSkillIfPresent"));
-        assert!(!script.contains("Get-Sha256Hex"));
-        assert!(!script.contains("Get-FileHash"));
+        assert_eq!(
+            release_asset_url("v1.2.3", "SHA256SUMS.txt"),
+            "https://github.com/mdonmez/RESense/releases/download/v1.2.3/SHA256SUMS.txt"
+        );
     }
 
     #[test]
-    fn installer_handoff_is_valid_powershell() {
-        let target = PathBuf::from(r"C:\Tools\resense.exe");
-        let script = installer_handoff_script(&target, 42);
-        let path = std::env::temp_dir().join(format!(
-            "resense-installer-handoff-{}.ps1",
-            std::process::id()
-        ));
-        fs::write(&path, script).expect("could not write PowerShell syntax fixture");
+    fn staging_and_commit_scripts_are_valid_powershell() {
+        let root = PathBuf::from(r"C:\Temp\resense-update");
+        let release = LatestRelease {
+            version: Version::parse_tag("v1.2.3").unwrap(),
+            tag: "v1.2.3".to_owned(),
+        };
+        let installer = root.join("install.ps1");
+        let binary = root.join("resense.exe");
+        let skill = root.join("SKILL.md");
+        let script = staging_script(&release, &root, &installer, &binary, Some(&skill));
+        assert!(
+            script.contains(
+                "https://github.com/mdonmez/RESense/releases/download/v1.2.3/install.ps1"
+            )
+        );
+        assert!(script.contains("-StageBinaryPath"));
+        assert!(script.contains("-StageSkillPath"));
+        assert!(script.contains("Get-Sha256Hex"));
+        assert!(!script.contains("git.new"));
+        assert!(!script.contains("ParentProcessId"));
+        assert!(!script.contains("TargetExecutable"));
+        assert!(!script.contains("ScriptBlock::Create"));
+
+        let commit = skill_commit_script(&installer, &skill);
+        assert!(commit.contains("-CommitSkillPath"));
+        assert!(!commit.contains("git.new"));
+
+        let path =
+            std::env::temp_dir().join(format!("resense-update-script-{}.ps1", std::process::id()));
+        fs::write(&path, format!("{script}\n{commit}"))
+            .expect("could not write PowerShell syntax fixture");
 
         let command = format!(
             "$source = Get-Content -LiteralPath {} -Raw; [void][scriptblock]::Create($source)",
