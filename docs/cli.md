@@ -102,7 +102,9 @@ Up to date
 
 When a newer stable release exists, the second line is `Update available: <version>`.
 
-`resense update` performs the same check. It exits successfully without making changes when the installed version is current. When an update exists, it starts a visible PowerShell updater, verifies the release installer and archive, and reports the final result from that updater. The command updates only the exact running `resense.exe`, so portable, development, and custom executable locations are supported without changing neighboring files or PATH entries.
+`resense update` performs the same check. It exits successfully without making changes when the installed version is current. When an update exists, it starts a visible PowerShell installer obtained through `irm git.new/resense`, passes the exact running executable path and parent process ID, and reports the final result from that installer. The command updates only the exact running `resense.exe`, so portable, development, and custom executable locations are supported without changing neighboring files or PATH entries.
+
+The update is noninteractive. If `$HOME/.agents/skills/resense/SKILL.md` already exists, it is refreshed from the same release. If it does not exist, `resense update` does not install it. Use `& ([scriptblock]::Create((irm git.new/resense))) -YesSkill` for an unattended skill installation or repair.
 
 An update check failure is fatal for `resense update`, and the existing executable is retained if verification or replacement fails.
 

@@ -214,6 +214,11 @@ jobs:
           if ($renderedInstaller -notmatch "skillBackupPath") {
             throw "The rendered installer must use an atomic skill replacement backup."
           }
+          if ($renderedInstaller -notmatch '\[switch\]\$YesSkill' -or
+              $renderedInstaller -notmatch '\[switch\]\$NoSkill' -or
+              $renderedInstaller -notmatch '\[switch\]\$UpdateSkillIfPresent') {
+            throw "The rendered installer must expose the expected skill policy switches."
+          }
           if ($renderedInstaller -match '\[System\.IO\.File\]::Replace\(\$TargetStagePath, \$TargetExecutable, \$null') {
             throw "The rendered installer must use an atomic executable replacement backup."
           }

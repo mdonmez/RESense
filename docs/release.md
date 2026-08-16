@@ -34,6 +34,12 @@ Latest installation:
 irm git.new/resense | iex
 ```
 
+The interactive installer asks whether to install the optional agent skill. To install the binary and skill without prompting, run:
+
+```powershell
+& ([scriptblock]::Create((irm git.new/resense))) -YesSkill
+```
+
 or
 
 ```powershell
@@ -58,13 +64,15 @@ Latest uninstall:
 irm https://github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
 ```
 
-The installer and uninstaller are user-scoped. The installer also installs the matching skill release asset at `$HOME/.agents/skills/resense/SKILL.md`. They do not install services, modify NitroSense, or require administrator privileges.
+The installer and uninstaller are user-scoped. The installer can install the matching skill release asset at `$HOME/.agents/skills/resense/SKILL.md`. They do not install services, modify NitroSense, or require administrator privileges.
 
 ## Self-Update
 
 `resense --version` reports the installed version and performs a fresh check for the latest published stable release. `resense update` uses the same source and does nothing when the installed version is current.
 
-When a newer release exists, the command starts a visible updater process. The updater verifies `install.ps1` against `SHA256SUMS.txt`, then uses that verified installer to verify the release ZIP before replacing only the exact running `resense.exe`. It does not change PATH, install directories, services, registry settings, or neighboring files. This also supports portable, development, and custom executable locations.
+When a newer release exists, the command starts a visible installer process using `irm git.new/resense`. The installer receives the exact running executable path and parent process ID, waits for RESense to exit, verifies the release ZIP, and replaces only that executable. It does not change PATH, install directories, services, registry settings, or neighboring files. This also supports portable, development, and custom executable locations.
+
+The update is noninteractive. If the skill already exists, the installer refreshes it from the same release. If it does not exist, the update leaves it absent.
 
 The existing executable is preserved when the release cannot be verified or the replacement is blocked. The updater reports the final download, verification, replacement, or failure result independently after the command hands it off.
 

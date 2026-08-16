@@ -21,6 +21,8 @@ Open Terminal (cmd/PowerShell) and run to install RESense:
 irm git.new/resense | iex
 ```
 
+The interactive installer asks whether to install the optional RESense agent skill. Choosing no installs only the RESense binary.
+
 <details>
 <summary>Install a specific version</summary>
 
@@ -45,7 +47,13 @@ irm github.com/mdonmez/RESense/releases/latest/download/uninstall.ps1 | iex
 
 ### Agent Skill
 
-The RESense installer also installs the skill used by compatible AI coding tools at `$HOME/.agents/skills/resense/SKILL.md`. The skill is downloaded from the same GitHub Release as the RESense binary, so updating RESense updates the skill to the matching version without requiring Bun, Node, npm, npx, or the Skills CLI.
+The RESense agent skill is installed at `$HOME/.agents/skills/resense/SKILL.md` when you choose yes during interactive installation. For unattended installation or skill repair, use:
+
+```powershell
+& ([scriptblock]::Create((irm git.new/resense))) -YesSkill
+```
+
+The skill is downloaded from the same GitHub Release as the RESense binary. `resense update` never prompts: it refreshes the skill only when it already exists, and otherwise updates only the binary.
 
 Just describe what you want. Your agent can help installing and updating RESense, checking the current state, and controlling your computer.
 

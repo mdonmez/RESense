@@ -2,7 +2,10 @@
 
 param(
     [string]$TargetExecutable,
-    [int]$ParentProcessId = 0
+    [int]$ParentProcessId = 0,
+    [switch]$YesSkill,
+    [switch]$NoSkill,
+    [switch]$UpdateSkillIfPresent
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,6 +38,44 @@ $ExtractRoot = Join-Path $TemporaryRoot "extract"
 $StagePath = Join-Path $TemporaryRoot "stage"
 $SkillInstallPath = Join-Path $HOME ".agents\skills\resense\SKILL.md"
 $BaseUrl = "https://github.com/$Repository/releases/download/$ReleaseTag"
+
+if (($YesSkill -and $NoSkill) -or
+    ($YesSkill -and $UpdateSkillIfPresent) -or
+    ($NoSkill -and $UpdateSkillIfPresent)) {
+    throw "Choose only one of -YesSkill, -NoSkill, or -UpdateSkillIfPresent."
+}
+if ($UpdateSkillIfPresent -and -not $BinaryUpdate) {
+    throw "-UpdateSkillIfPresent is only valid for a binary update."
+}
+
+function Test-InteractiveSession {
+    try {
+        return $null -ne $Host.UI -and $null -ne $Host.UI.RawUI -and -not [Console]::IsInputRedirected
+    }
+    catch {
+        return $false
+    }
+}
+
+function Resolve-SkillInstall {
+    if ($UpdateSkillIfPresent) {
+        return Test-Path -LiteralPath $SkillInstallPath -PathType Leaf
+    }
+    if ($YesSkill) {
+        return $true
+    }
+    if ($NoSkill) {
+        return $false
+    }
+    if (-not (Test-InteractiveSession)) {
+        return $false
+    }
+
+    $answer = Read-Host "Install the RESense agent skill? [Y/n]"
+    return [string]::IsNullOrWhiteSpace($answer) -or $answer -notmatch '^(n|no)$'
+}
+
+$InstallSkill = Resolve-SkillInstall
 
 function Get-ExpectedChecksum {
     param(
@@ -158,12 +199,16 @@ try {
 
     $packagePath = Join-Path $DownloadRoot $PackageName
     $checksumsPath = Join-Path $DownloadRoot "SHA256SUMS.txt"
-    $skillDownloadPath = Join-Path $DownloadRoot "SKILL.md"
     Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/$PackageName" -OutFile $packagePath
     Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
-    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SKILL.md" -OutFile $skillDownloadPath
+    if ($InstallSkill) {
+        $skillDownloadPath = Join-Path $DownloadRoot "SKILL.md"
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$BaseUrl/SKILL.md" -OutFile $skillDownloadPath
+    }
     Assert-Checksum -FilePath $packagePath -AssetName $PackageName -ChecksumsFile $checksumsPath
-    Assert-Checksum -FilePath $skillDownloadPath -AssetName "SKILL.md" -ChecksumsFile $checksumsPath
+    if ($InstallSkill) {
+        Assert-Checksum -FilePath $skillDownloadPath -AssetName "SKILL.md" -ChecksumsFile $checksumsPath
+    }
 
     Expand-Archive -LiteralPath $packagePath -DestinationPath $ExtractRoot -Force
     $executablePath = Join-Path $ExtractRoot "resense.exe"
@@ -184,8 +229,10 @@ try {
             throw "Could not replace '$TargetExecutable'. Close processes using it and try again."
         }
 
-        Install-Skill -SourcePath $skillDownloadPath
-        Write-Output "RESense skill $Version installed at $SkillInstallPath."
+        if ($InstallSkill) {
+            Install-Skill -SourcePath $skillDownloadPath
+            Write-Output "RESense skill $Version installed at $SkillInstallPath."
+        }
         Write-Output "RESense updated at $TargetExecutable."
         return
     }
@@ -218,9 +265,13 @@ try {
         $env:Path = (($currentEntries + $InstallPath) -join ";")
     }
 
-    Install-Skill -SourcePath $skillDownloadPath
+    if ($InstallSkill) {
+        Install-Skill -SourcePath $skillDownloadPath
+    }
     Write-Output "RESense $Version installed at $InstallPath."
-    Write-Output "RESense skill $Version installed at $SkillInstallPath."
+    if ($InstallSkill) {
+        Write-Output "RESense skill $Version installed at $SkillInstallPath."
+    }
     Write-Output "Open a new terminal, or run 'resense --help' in this session."
 }
 finally {

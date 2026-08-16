@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::ffi::OsString;
 use std::fmt;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -82,7 +83,6 @@ struct ReleasePayload {
 
 #[derive(Debug)]
 struct LatestRelease {
-    tag: String,
     version: Version,
 }
 
@@ -127,7 +127,7 @@ pub fn run_update() -> Result<()> {
     }
 
     println!("Update available: {}", latest.version);
-    handoff_update(&latest.tag)?;
+    handoff_update()?;
     println!("Update handed off");
     Ok(())
 }
@@ -144,10 +144,7 @@ fn parse_release(payload: &str) -> Result<LatestRelease> {
     }
 
     let version = Version::parse_tag(&release.tag_name)?;
-    Ok(LatestRelease {
-        tag: release.tag_name,
-        version,
-    })
+    Ok(LatestRelease { version })
 }
 
 fn run_powershell_capture(script: &str) -> Result<String> {
@@ -197,9 +194,9 @@ fn run_powershell_capture(script: &str) -> Result<String> {
     }
 }
 
-fn handoff_update(tag: &str) -> Result<()> {
-    let target = std::env::current_exe().context("could not resolve the running executable")?;
-    let script = updater_script(tag, &target.to_string_lossy(), std::process::id());
+fn handoff_update() -> Result<()> {
+    let target = running_executable()?;
+    let script = installer_handoff_script(&target, std::process::id());
 
     Command::new("powershell.exe")
         .args([
@@ -217,90 +214,49 @@ fn handoff_update(tag: &str) -> Result<()> {
     Ok(())
 }
 
-fn updater_script(tag: &str, target: &str, parent_process_id: u32) -> String {
-    let script = r#"
-$ErrorActionPreference = 'Stop'
-$repository = 'mdonmez/RESense'
-$releaseTag = __RELEASE_TAG__
-$targetExecutable = __TARGET_EXECUTABLE__
-$parentProcessId = __PARENT_PROCESS_ID__
-$temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('resense-update-' + [guid]::NewGuid().ToString('N'))
-$baseUrl = "https://github.com/$repository/releases/download/$releaseTag"
-$apiUrl = "https://api.github.com/repos/$repository/releases/latest"
-
-function Get-Sha256Hex {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath
-    )
-
-    $algorithm = $null
-    $stream = $null
-    try {
-        $algorithm = [System.Security.Cryptography.SHA256]::Create()
-        $stream = [System.IO.File]::OpenRead($FilePath)
-        $hashBytes = $algorithm.ComputeHash($stream)
-        return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToUpperInvariant()
+fn running_executable() -> Result<PathBuf> {
+    let target = std::env::current_exe().context("could not resolve the running executable")?;
+    if !target.is_file() {
+        bail!(
+            "the running executable does not exist: {}",
+            target.display()
+        )
     }
-    finally {
-        if ($null -ne $stream) {
-            $stream.Dispose()
-        }
-        if ($null -ne $algorithm) {
-            $algorithm.Dispose()
-        }
-    }
+    Ok(target)
 }
 
+fn installer_handoff_script(target: &Path, parent_process_id: u32) -> String {
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+$targetExecutable = __TARGET_EXECUTABLE__
+$parentProcessId = __PARENT_PROCESS_ID__
+
 try {
-    New-Item -ItemType Directory -Force -Path $temporaryRoot | Out-Null
-    $headers = @{
-        Accept = 'application/vnd.github+json'
-        'User-Agent' = 'RESense-updater'
+    $installerResponse = irm 'git.new/resense' -TimeoutSec 30
+    if ($installerResponse -is [byte[]]) {
+        $installerText = [System.Text.Encoding]::UTF8.GetString($installerResponse)
     }
-    $release = Invoke-RestMethod -UseBasicParsing -Method Get -Uri $apiUrl -Headers $headers -TimeoutSec 5
-    if ([string]$release.tag_name -ne $releaseTag -or [bool]$release.draft -or [bool]$release.prerelease) {
-        throw "The latest GitHub release changed before the update started."
+    else {
+        $installerText = [string]$installerResponse
     }
-
-    $checksumsPath = Join-Path $temporaryRoot 'SHA256SUMS.txt'
-    $installerPath = Join-Path $temporaryRoot 'install.ps1'
-    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$baseUrl/SHA256SUMS.txt" -OutFile $checksumsPath
-    Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri "$baseUrl/install.ps1" -OutFile $installerPath
-
-    $checksumMatches = @(Get-Content -LiteralPath $checksumsPath | Where-Object {
-        $parts = $_.Trim() -split '\s+', 2
-        $parts.Count -eq 2 -and $parts[1].Trim() -eq 'install.ps1'
-    })
-    if ($checksumMatches.Count -ne 1) {
-        throw "SHA-256 entry for install.ps1 was not found or was ambiguous."
+    if ([string]::IsNullOrWhiteSpace($installerText)) {
+        throw 'The latest installer was empty.'
     }
 
-    $expectedHash = (($checksumMatches[0].Trim() -split '\s+', 2)[0]).ToUpperInvariant()
-    $actualHash = Get-Sha256Hex -FilePath $installerPath
-    if ($actualHash -ne $expectedHash) {
-        throw 'SHA-256 verification failed for install.ps1.'
-    }
-
-    & $installerPath -TargetExecutable $targetExecutable -ParentProcessId $parentProcessId
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
-    }
+    $installer = [scriptblock]::Create($installerText)
+    & $installer -TargetExecutable $targetExecutable -ParentProcessId $parentProcessId -UpdateSkillIfPresent
 }
 catch {
     Write-Error ('RESense update failed: ' + $_.Exception.Message)
     exit 1
 }
-finally {
-    if (Test-Path -LiteralPath $temporaryRoot) {
-        Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
 "#;
 
     script
-        .replace("__RELEASE_TAG__", &powershell_literal(tag))
-        .replace("__TARGET_EXECUTABLE__", &powershell_literal(target))
+        .replace(
+            "__TARGET_EXECUTABLE__",
+            &powershell_literal(&target.to_string_lossy()),
+        )
         .replace("__PARENT_PROCESS_ID__", &parent_process_id.to_string())
 }
 
@@ -311,6 +267,7 @@ fn powershell_literal(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn parses_stable_versions() {
@@ -394,14 +351,49 @@ mod tests {
     }
 
     #[test]
-    fn updater_targets_only_the_running_executable() {
-        let script = updater_script("v1.2.3", r"C:\Tools\resense.exe", 42);
+    fn installer_handoff_targets_only_the_running_executable() {
+        let target = PathBuf::from(r"C:\Tools\resense.exe");
+        let script = installer_handoff_script(&target, 42);
         assert!(script.contains("-TargetExecutable"));
         assert!(script.contains(r"'C:\Tools\resense.exe'"));
         assert!(script.contains("$parentProcessId = 42"));
-        assert!(script.contains("install.ps1"));
-        assert!(script.contains("SHA-256 verification failed for install.ps1"));
-        assert!(script.contains("function Get-Sha256Hex"));
+        assert!(script.contains("irm 'git.new/resense'"));
+        assert!(script.contains("[scriptblock]::Create"));
+        assert!(script.contains("-UpdateSkillIfPresent"));
+        assert!(!script.contains("Get-Sha256Hex"));
         assert!(!script.contains("Get-FileHash"));
+    }
+
+    #[test]
+    fn installer_handoff_is_valid_powershell() {
+        let target = PathBuf::from(r"C:\Tools\resense.exe");
+        let script = installer_handoff_script(&target, 42);
+        let path = std::env::temp_dir().join(format!(
+            "resense-installer-handoff-{}.ps1",
+            std::process::id()
+        ));
+        fs::write(&path, script).expect("could not write PowerShell syntax fixture");
+
+        let command = format!(
+            "$source = Get-Content -LiteralPath {} -Raw; [void][scriptblock]::Create($source)",
+            powershell_literal(&path.to_string_lossy())
+        );
+        let output = Command::new("powershell.exe")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &command,
+            ])
+            .output()
+            .expect("PowerShell is unavailable");
+        let _ = fs::remove_file(&path);
+
+        assert!(
+            output.status.success(),
+            "invalid generated PowerShell: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

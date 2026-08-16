@@ -29,6 +29,14 @@ If `resense` is not available, offer the latest user-scoped installation:
 irm git.new/resense | iex
 ```
 
+The interactive installer asks whether to install the optional RESense agent skill. For unattended skill installation or repair, use:
+
+```powershell
+& ([scriptblock]::Create((irm git.new/resense))) -YesSkill
+```
+
+Use `resense update` for normal binary updates. It never prompts about the skill. If the skill already exists, it refreshes it from the same release; if it does not exist, it remains absent.
+
 Use a new terminal if the current shell has not refreshed its PATH.
 
 ## Command Discovery
