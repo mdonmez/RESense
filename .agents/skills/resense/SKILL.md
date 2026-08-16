@@ -66,7 +66,7 @@ resense status --json
 resense status --watch --interval 2
 ```
 
-After a mutation, use the command's verified output or a focused status read to confirm the resulting state. Surface operational errors instead of guessing or substituting fallback values.
+Mutation commands print only the verified fields changed by that command. Use `resense status` or a focused status read when you need the complete state. Surface operational errors instead of guessing or substituting fallback values.
 
 Fan status reports the behavior currently applied. `fan.mode` is `auto`, `max`, or `custom`, and live CPU and GPU telemetry is under `fan.cpu` and `fan.gpu`. `fan.settings.custom` appears only when `fan.mode=custom`. An automatic custom fan reports `mode=auto` without a percentage; a manual custom fan reports its current percentage. Never infer a manual override from an `auto` or `max` status.
 

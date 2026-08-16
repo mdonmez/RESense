@@ -1,7 +1,7 @@
 use crate::cli::StatusTarget;
 use crate::device::{
-    Direction, DynamicEffect, DynamicLighting, FanCustomControl, FanMode, FanState, KeyboardState,
-    LightingMode, OperationMode, Rgb, SoundPreset, SystemState,
+    Direction, DynamicEffect, DynamicLighting, FanCustomControl, FanCustomRequest, FanMode,
+    FanState, KeyboardState, LightingMode, OperationMode, Rgb, SoundPreset, SystemState,
 };
 use crate::error::Result;
 use serde::Serialize;
@@ -190,12 +190,32 @@ fn render_text(value: StatusValue) -> String {
     output
 }
 
-pub fn print_fan_state(state: FanState) {
-    print!("{}", render_fan_text(&state));
+pub fn print_fan_mode(mode: FanMode) {
+    print!("{}", render_fan_mode_text(mode));
 }
 
-pub fn print_keyboard_state(state: KeyboardState) {
-    print!("{}", render_keyboard_text(&state));
+pub fn print_fan_custom_state(state: FanState, request: FanCustomRequest) {
+    print!("{}", render_fan_custom_text(&state, request));
+}
+
+pub fn print_keyboard_brightness(state: KeyboardState) {
+    print!("{}", render_keyboard_brightness_text(&state));
+}
+
+pub fn print_keyboard_timeout(state: KeyboardState) {
+    print!("{}", render_keyboard_timeout_text(&state));
+}
+
+pub fn print_keyboard_lighting(state: KeyboardState) {
+    print!("{}", render_keyboard_lighting_text(&state));
+}
+
+pub fn print_keyboard_sticky_keys(state: KeyboardState) {
+    print!("{}", render_keyboard_sticky_keys_text(&state));
+}
+
+pub fn print_keyboard_win_menu_lock(state: KeyboardState) {
+    print!("{}", render_keyboard_win_menu_lock_text(&state));
 }
 
 pub fn print_mode(mode: OperationMode) {
@@ -210,9 +230,19 @@ pub fn print_sound(value: SoundPreset) {
     println!("sound={}", sound_name(value));
 }
 
-fn render_fan_text(state: &FanState) -> String {
+fn render_fan_mode_text(mode: FanMode) -> String {
+    format!("fan.mode={mode}\n", mode = fan_mode_name(mode))
+}
+
+fn render_fan_custom_text(state: &FanState, request: FanCustomRequest) -> String {
     let mut output = String::new();
-    render_fan(&mut output, state);
+    writeln!(output, "fan.mode={}", fan_mode_name(state.mode)).unwrap();
+    if request.cpu().is_some() {
+        render_fan_custom(&mut output, "fan.settings.custom.cpu", state.custom.cpu);
+    }
+    if request.gpu().is_some() {
+        render_fan_custom(&mut output, "fan.settings.custom.gpu", state.custom.gpu);
+    }
     output
 }
 
@@ -238,14 +268,42 @@ fn render_fan_custom(output: &mut String, prefix: &str, control: FanCustomContro
     }
 }
 
-fn render_keyboard_text(state: &KeyboardState) -> String {
+fn render_keyboard_brightness_text(state: &KeyboardState) -> String {
+    format!("keyboard.brightness={}\n", state.brightness.get())
+}
+
+fn render_keyboard_timeout_text(state: &KeyboardState) -> String {
+    format!("keyboard.backlight_timeout={}\n", state.backlight_timeout)
+}
+
+fn render_keyboard_lighting_text(state: &KeyboardState) -> String {
     let mut output = String::new();
-    render_keyboard(&mut output, state);
+    render_keyboard_lighting(&mut output, state);
     output
+}
+
+fn render_keyboard_sticky_keys_text(state: &KeyboardState) -> String {
+    format!("keyboard.sticky_keys={}\n", state.sticky_keys)
+}
+
+fn render_keyboard_win_menu_lock_text(state: &KeyboardState) -> String {
+    format!("keyboard.win_menu_lock={}\n", state.win_menu_lock)
 }
 
 fn render_keyboard(output: &mut String, state: &KeyboardState) {
     writeln!(output, "keyboard.brightness={}", state.brightness.get()).unwrap();
+    render_keyboard_lighting(output, state);
+    writeln!(
+        output,
+        "keyboard.backlight_timeout={}",
+        state.backlight_timeout
+    )
+    .unwrap();
+    writeln!(output, "keyboard.sticky_keys={}", state.sticky_keys).unwrap();
+    writeln!(output, "keyboard.win_menu_lock={}", state.win_menu_lock).unwrap();
+}
+
+fn render_keyboard_lighting(output: &mut String, state: &KeyboardState) {
     match state.lighting.mode {
         LightingMode::Static => {
             writeln!(output, "keyboard.lighting.mode=static").unwrap();
@@ -265,14 +323,6 @@ fn render_keyboard(output: &mut String, state: &KeyboardState) {
             );
         }
     }
-    writeln!(
-        output,
-        "keyboard.backlight_timeout={}",
-        state.backlight_timeout
-    )
-    .unwrap();
-    writeln!(output, "keyboard.sticky_keys={}", state.sticky_keys).unwrap();
-    writeln!(output, "keyboard.win_menu_lock={}", state.win_menu_lock).unwrap();
 }
 
 fn render_zones(output: &mut String, prefix: &str, zones: &[crate::device::Zone; 4]) {
@@ -470,7 +520,7 @@ fn bail_type<T>(message: &str) -> Result<T> {
 mod tests {
     use super::*;
     use crate::device::{
-        Brightness, DynamicSpeed, FanCustomControl, FanCustomState, FanTelemetry,
+        Brightness, DynamicSpeed, FanChange, FanCustomControl, FanCustomState, FanTelemetry,
         KeyboardLightingState, Percent, Zone,
     };
 
@@ -551,6 +601,27 @@ fan.settings.custom.gpu.mode=auto\n"
     }
 
     #[test]
+    fn fan_mutations_render_only_changed_fields() {
+        assert_eq!(render_fan_mode_text(FanMode::Max), "fan.mode=max\n");
+
+        let request = FanCustomRequest::new(
+            Some(FanChange::Manual(Percent::new(70).unwrap())),
+            Some(FanChange::Auto),
+        )
+        .unwrap();
+        assert_eq!(
+            render_fan_custom_text(&sample_state().fan, request),
+            "fan.mode=custom\n\
+fan.settings.custom.cpu.mode=manual\n\
+fan.settings.custom.cpu.percent=70\n\
+fan.settings.custom.gpu.mode=auto\n"
+        );
+        let output = render_fan_custom_text(&sample_state().fan, request);
+        assert!(!output.contains("temperature_c"));
+        assert!(!output.contains(".rpm="));
+    }
+
+    #[test]
     fn keyboard_text_renders_only_active_static_settings() {
         let output = render_text(StatusValue::Keyboard(sample_state().keyboard));
         assert!(output.contains("keyboard.lighting.mode=static\n"));
@@ -572,6 +643,47 @@ fan.settings.custom.gpu.mode=auto\n"
         assert!(output.contains("keyboard.lighting.settings.wave.direction=fromleft\n"));
         assert!(!output.contains("keyboard.lighting.settings.wave.color"));
         assert!(!output.contains("keyboard.lighting.settings.static"));
+    }
+
+    #[test]
+    fn keyboard_mutations_render_only_changed_fields() {
+        let state = sample_state().keyboard;
+        assert_eq!(
+            render_keyboard_brightness_text(&state),
+            "keyboard.brightness=5\n"
+        );
+        assert_eq!(
+            render_keyboard_timeout_text(&state),
+            "keyboard.backlight_timeout=true\n"
+        );
+        assert_eq!(
+            render_keyboard_sticky_keys_text(&state),
+            "keyboard.sticky_keys=false\n"
+        );
+        assert_eq!(
+            render_keyboard_win_menu_lock_text(&state),
+            "keyboard.win_menu_lock=true\n"
+        );
+
+        let static_output = render_keyboard_lighting_text(&state);
+        assert!(static_output.starts_with("keyboard.lighting.mode=static\n"));
+        assert!(
+            static_output.contains("keyboard.lighting.settings.static.zones[4].color=#FFFFFF\n")
+        );
+        assert!(!static_output.contains("keyboard.brightness"));
+        assert!(!static_output.contains("keyboard.backlight_timeout"));
+
+        let mut dynamic_state = state;
+        dynamic_state.lighting.mode = LightingMode::Dynamic;
+        let dynamic_output = render_keyboard_lighting_text(&dynamic_state);
+        assert_eq!(
+            dynamic_output,
+            "keyboard.lighting.mode=wave\n\
+keyboard.lighting.settings.wave.speed=3\n\
+keyboard.lighting.settings.wave.direction=fromleft\n"
+        );
+        assert!(!dynamic_output.contains("keyboard.lighting.settings.static"));
+        assert!(!dynamic_output.contains("keyboard.brightness"));
     }
 
     fn dynamic_text(effect: DynamicEffect) -> String {

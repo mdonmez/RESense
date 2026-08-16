@@ -30,35 +30,35 @@ fn run_hardware_command(device: Device, command: Commands) -> Result<()> {
             run_status(&device, args.target, args.json, args.watch, args.interval)?
         }
         Commands::Fan(command) => match command.command {
-            FanCommands::Auto => output::print_fan_state(device.set_fan_auto()?),
-            FanCommands::Max => output::print_fan_state(device.set_fan_max()?),
+            FanCommands::Auto => output::print_fan_mode(device.set_fan_auto()?.mode),
+            FanCommands::Max => output::print_fan_mode(device.set_fan_max()?.mode),
             FanCommands::Custom(args) => {
                 let request = FanCustomRequest::new(
                     fan_change(args.cpu, args.cpu_auto, "cpu")?,
                     fan_change(args.gpu, args.gpu_auto, "gpu")?,
                 )?;
-                output::print_fan_state(device.set_fan_custom(request)?)
+                output::print_fan_custom_state(device.set_fan_custom(request)?, request)
             }
         },
         Commands::Keyboard(command) => match command.command {
-            KeyboardCommands::Brightness(args) => output::print_keyboard_state(
+            KeyboardCommands::Brightness(args) => output::print_keyboard_brightness(
                 device.set_keyboard_brightness(Brightness::new(args.level)?)?,
             ),
             KeyboardCommands::Timeout(args) => {
-                output::print_keyboard_state(device.set_keyboard_timeout(args.state.enabled())?)
+                output::print_keyboard_timeout(device.set_keyboard_timeout(args.state.enabled())?)
             }
             KeyboardCommands::Static(args) => {
-                output::print_keyboard_state(device.set_keyboard_static(static_request(args)?)?)
+                output::print_keyboard_lighting(device.set_keyboard_static(static_request(args)?)?)
             }
-            KeyboardCommands::Dynamic(args) => output::print_keyboard_state(
+            KeyboardCommands::Dynamic(args) => output::print_keyboard_lighting(
                 device.set_keyboard_dynamic(dynamic_request(args.command)?)?,
             ),
             KeyboardCommands::Sticky(args) => {
-                output::print_keyboard_state(device.set_sticky_keys(args.state.enabled())?)
+                output::print_keyboard_sticky_keys(device.set_sticky_keys(args.state.enabled())?)
             }
-            KeyboardCommands::WinMenu(args) => {
-                output::print_keyboard_state(device.set_win_menu_lock(args.state.enabled())?)
-            }
+            KeyboardCommands::WinMenu(args) => output::print_keyboard_win_menu_lock(
+                device.set_win_menu_lock(args.state.enabled())?,
+            ),
         },
         Commands::Mode(args) => {
             output::print_mode(device.set_mode(operation_mode(args.mode), args.skip_whispermode)?)

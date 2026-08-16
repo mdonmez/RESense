@@ -125,4 +125,4 @@ resense display overdrive enable
 resense sound movies
 ```
 
-Successful mutations print only the verified resulting state. Quiet mode forces both fans to global auto and blocks subsequent fan control until the mode changes. `keyboard sticky` targets the current Windows session. DTS sound and WhisperMode use a reachable admin-agent session because their controlled state is shared on the validated machine.
+Successful mutations print only the verified fields changed by the command. Fan mode changes print the new selector, custom fan changes print the selector and changed custom controls, and keyboard lighting changes print the selected lighting mode and its settings. Use `status` when you need the complete state. Quiet mode forces both fans to global auto and blocks subsequent fan control until the mode changes. `keyboard sticky` targets the current Windows session. DTS sound and WhisperMode use a reachable admin-agent session because their controlled state is shared on the validated machine.
