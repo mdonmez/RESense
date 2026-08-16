@@ -26,8 +26,8 @@ pub enum Commands {
     Keyboard(KeyboardCommand),
     #[command(about = "Set the operation mode")]
     Mode(ModeArgs),
-    #[command(about = "Manage display settings")]
-    Display(DisplayCommand),
+    #[command(about = "Enable or disable overdrive")]
+    Overdrive(ToggleArgs),
     #[command(about = "Set the sound preset")]
     Sound(SoundArgs),
     #[command(about = "Check for and install updates")]
@@ -226,19 +226,6 @@ pub struct ModeArgs {
 }
 
 #[derive(Args, Debug)]
-#[command(about = "Manage display settings")]
-pub struct DisplayCommand {
-    #[command(subcommand)]
-    pub command: DisplayCommands,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum DisplayCommands {
-    #[command(about = "Enable or disable LCD overdrive")]
-    Overdrive(ToggleArgs),
-}
-
-#[derive(Args, Debug)]
 pub struct SoundArgs {
     #[arg(help = "Sound preset")]
     pub preset: SoundPreset,
@@ -255,7 +242,7 @@ pub enum StatusTarget {
     Fan,
     Keyboard,
     Mode,
-    Display,
+    Overdrive,
     Sound,
 }
 
@@ -380,6 +367,29 @@ mod tests {
     }
 
     #[test]
+    fn parses_direct_overdrive_command() {
+        let cli = Cli::try_parse_from(["resense", "overdrive", "enable"]).unwrap();
+
+        match cli.command {
+            Commands::Overdrive(args) => assert_eq!(args.state, ToggleState::Enable),
+            _ => panic!("expected overdrive command"),
+        }
+    }
+
+    #[test]
+    fn parses_overdrive_status_target() {
+        let cli = Cli::try_parse_from(["resense", "status", "overdrive", "--json"]).unwrap();
+
+        match cli.command {
+            Commands::Status(args) => {
+                assert_eq!(args.target, Some(StatusTarget::Overdrive));
+                assert!(args.json);
+            }
+            _ => panic!("expected status command"),
+        }
+    }
+
+    #[test]
     fn parses_effect_specific_dynamic_commands() {
         let cli = Cli::try_parse_from([
             "resense",
@@ -443,6 +453,7 @@ mod tests {
             vec!["resense", "fan", "speed", "--cpu", "70"],
             vec!["resense", "keyboard", "backlight-timeout", "enable"],
             vec!["resense", "sound", "--backend", "dts", "music"],
+            vec!["resense", "display", "overdrive", "enable"],
         ] {
             assert!(
                 Cli::try_parse_from(command.clone()).is_err(),

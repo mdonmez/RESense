@@ -9,7 +9,7 @@ Completed and supported:
 - Fan telemetry, global auto, max, custom per-fan control, remembered manual percentages, and quiet-mode policy.
 - Quiet, default, and performance modes with verified readback and the environment-dependent WhisperMode integration.
 - Keyboard brightness, four-zone static lighting, dynamic effects, direction, speed, color, timeout, Sticky Keys, and Windows/Menu lock.
-- LCD overdrive read/write with verified readback.
+- Overdrive read/write with verified readback.
 - DTS sound presets for internal speakers and wired 3.5 mm Realtek output.
 - Session-aware settings and shared system settings follow the behavior of the Acer software.
 - Stable status reads, typed device APIs, registry access, and atomic keyboard profile persistence.
@@ -35,7 +35,7 @@ External notifications or scripts may be added later as explicit opt-in hooks, k
 
 ### Linux And Other Backends
 
-Linux requires a native hardware integration. The Linux research notes preserve the EC register leads, keyboard-device leads, and validation order in [`docs/re/linux-port.md`](re/linux-port.md). Fan control, operation modes, RPM, and temperatures are the strongest initial targets; keyboard readback and LCD overdrive remain unproven.
+Linux requires a native hardware integration. The Linux research notes preserve the EC register leads, keyboard-device leads, and validation order in [`docs/re/linux-port.md`](re/linux-port.md). Fan control, operation modes, RPM, and temperatures are the strongest initial targets; keyboard readback and overdrive remain unproven.
 
 Other deferred work includes broader Acer model support, battery charge limits, fan curves, telemetry export, GUI/tray integration, and remote control. None should be added speculatively.
 

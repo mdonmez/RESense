@@ -28,12 +28,12 @@ The saved custom settings remain physically preserved for later use, but public 
 | `resense keyboard sticky enable|disable` | Set Sticky Keys | Current Windows session is read back |
 | `resense keyboard win-menu enable|disable` | Set Windows/Menu lock | Live lock state is read back |
 
-## Mode, Display, And Sound
+## Mode, Overdrive, And Sound
 
 | Command | Device operation | Verified result |
 | --- | --- | --- |
 | `resense mode quiet|default|performance` | Set operation mode | Mode is read back; quiet mode enables automatic fan control |
-| `resense display overdrive enable|disable` | Set LCD overdrive | Capability and resulting state are read back |
+| `resense overdrive enable|disable` | Set overdrive | Capability and resulting state are read back |
 | `resense sound <preset>` | Set DTS preset | Preset is read back on supported DTS output |
 
 Sound validation covers built-in speakers and wired 3.5 mm Realtek output.
@@ -53,7 +53,7 @@ Record protocol details in [protocol.md](protocol.md) only when a change affects
 
 - Fans: telemetry, auto, max, mixed custom control, and automatic-control percentage preservation.
 - Keyboard: static and dynamic lighting, brightness, zones, effects, direction, speed, color, and timeout.
-- Display: overdrive enable and disable.
+- Overdrive: enable and disable.
 - Modes: quiet, default, performance, and WhisperMode behavior when available.
 - Sound: auto, music, and shooter on built-in speakers and wired output.
 

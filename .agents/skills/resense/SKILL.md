@@ -1,6 +1,6 @@
 ---
 name: resense
-description: 'Inspect and control supported Acer Nitro hardware through the RESense CLI: fans, operation modes, keyboard lighting, display overdrive, DTS sound, and system status. Use this skill whenever the user mentions RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control, keyboard lighting, or laptop operation modes.'
+description: 'Inspect and control supported Acer Nitro hardware through the RESense CLI: fans, operation modes, keyboard lighting, overdrive, DTS sound, and system status. Use this skill whenever the user mentions RESense, NitroSense, PredatorSense, Acer Nitro hardware, fan control, keyboard lighting, or laptop operation modes.'
 ---
 
 # RESense
@@ -35,7 +35,7 @@ The interactive installer asks whether to install the optional RESense agent ski
 & ([scriptblock]::Create((irm git.new/resense))) -YesSkill
 ```
 
-Use `resense update` for normal binary updates. It never prompts about the skill. If the skill already exists, it refreshes it from the same release; if it does not exist, it remains absent.
+Use `resense update` for normal binary updates. It waits for the update to finish in the same command and uses one exact stable GitHub Release. If the skill already exists, it refreshes it from that release; if it does not exist, it remains absent. A binary update succeeds before skill replacement is attempted, and a skill failure is reported explicitly.
 
 Use a new terminal if the current shell has not refreshed its PATH.
 
@@ -60,7 +60,7 @@ resense status
 resense status fan
 resense status keyboard
 resense status mode
-resense status display
+resense status overdrive
 resense status sound
 resense status --json
 resense status --watch --interval 2
@@ -104,11 +104,11 @@ resense keyboard win-menu disable
 
 Keyboard lighting supports four static zones and dynamic effects including `breathing`, `neon`, `shifting`, `wave`, and `zoom`. Use `keyboard timeout` for the keyboard backlight timeout.
 
-## Display
+## Overdrive
 
 ```powershell
-resense display overdrive enable
-resense display overdrive disable
+resense overdrive enable
+resense overdrive disable
 ```
 
 ## Sound
@@ -137,6 +137,6 @@ Translate the user's intent into the smallest matching command, then verify the 
 "Cool down my laptop"           -> resense fan custom --cpu 80 --gpu 80
 "Is my laptop overheating?"     -> resense status
 "Set the keyboard to red"       -> resense keyboard static --zone1 FF0000 --zone2 FF0000 --zone3 FF0000 --zone4 FF0000
-"Turn on LCD overdrive"         -> resense display overdrive enable
+"Turn on overdrive"             -> resense overdrive enable
 "Set the sound for music"       -> resense sound music
 ```

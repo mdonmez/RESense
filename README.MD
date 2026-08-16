@@ -2,14 +2,14 @@
 
 RESense is an open-source command-line alternative to NitroSense for Acer Nitro AN515-58 laptops.
 
-It provides a direct way to control and check fans, power modes, keyboard lighting, display overdrive, and DTS sound presets on Windows. These features have been tested on the AN515-58 and may not work on other laptops.
+It provides a direct way to control and check fans, power modes, keyboard lighting, overdrive, and DTS sound presets on Windows. These features have been tested on the AN515-58 and may not work on other laptops.
 
 ## Capabilities
 
 - **Fan control** with automatic, maximum, and per-fan manual modes, plus live readings.
 - **Power modes** include quiet, default, and performance.
 - **Keyboard controls** include brightness, backlight timeout, four-zone static lighting, dynamic effects, Sticky Keys, and Windows/Menu lock.
-- **LCD overdrive**.
+- **Overdrive**.
 - **DTS sound presets** work with internal speakers and wired 3.5 mm Realtek output.
 - **Status** shows everything or one part of the laptop, in regular text or JSON, and can keep updating on screen.
 
@@ -53,7 +53,7 @@ The RESense agent skill is installed at `$HOME/.agents/skills/resense/SKILL.md` 
 & ([scriptblock]::Create((irm git.new/resense))) -YesSkill
 ```
 
-The skill is downloaded from the same GitHub Release as the RESense binary. `resense update` never prompts: it refreshes the skill only when it already exists, and otherwise updates only the binary.
+The skill is downloaded from the same GitHub Release as the RESense binary. `resense update` runs synchronously against exact release assets, refreshes the skill only when it already exists, and otherwise updates only the binary.
 
 Just describe what you want. Your agent can help installing and updating RESense, checking the current state, and controlling your computer.
 

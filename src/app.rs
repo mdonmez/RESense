@@ -63,11 +63,9 @@ fn run_hardware_command(device: Device, command: Commands) -> Result<()> {
         Commands::Mode(args) => {
             output::print_mode(device.set_mode(operation_mode(args.mode), args.skip_whispermode)?)
         }
-        Commands::Display(command) => match command.command {
-            crate::cli::DisplayCommands::Overdrive(args) => {
-                output::print_display(device.set_display_overdrive(args.state.enabled())?)
-            }
-        },
+        Commands::Overdrive(args) => {
+            output::print_overdrive(device.set_display_overdrive(args.state.enabled())?)
+        }
         Commands::Sound(args) => output::print_sound(device.set_sound(sound_preset(args.preset))?),
         Commands::Update => unreachable!("update is handled before connecting the device"),
     }
@@ -102,7 +100,7 @@ fn read_status(device: &Device, target: Option<StatusTarget>) -> Result<StatusVa
         Some(StatusTarget::Fan) => StatusValue::Fan(device.fan()?),
         Some(StatusTarget::Keyboard) => StatusValue::Keyboard(device.keyboard()?),
         Some(StatusTarget::Mode) => StatusValue::Mode(device.mode()?),
-        Some(StatusTarget::Display) => StatusValue::Display(device.display_overdrive()?),
+        Some(StatusTarget::Overdrive) => StatusValue::Overdrive(device.display_overdrive()?),
         Some(StatusTarget::Sound) => StatusValue::Sound(device.sound()?),
     })
 }

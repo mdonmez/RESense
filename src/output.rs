@@ -12,7 +12,7 @@ pub enum StatusValue {
     Fan(FanState),
     Keyboard(KeyboardState),
     Mode(OperationMode),
-    Display(Option<bool>),
+    Overdrive(Option<bool>),
     Sound(Option<SoundPreset>),
 }
 
@@ -21,7 +21,7 @@ struct StatusJson {
     fan: FanJson,
     keyboard: KeyboardJson,
     mode: OperationMode,
-    display: Option<bool>,
+    overdrive: Option<bool>,
     sound: Option<SoundPreset>,
 }
 
@@ -138,7 +138,7 @@ fn target_json(value: StatusValue, compact: bool) -> Result<String> {
         StatusValue::Fan(state) => json_string(&fan_json(&state), compact),
         StatusValue::Keyboard(state) => json_string(&keyboard_json(&state), compact),
         StatusValue::Mode(state) => json_string(&state, compact),
-        StatusValue::Display(state) => json_string(&state, compact),
+        StatusValue::Overdrive(state) => json_string(&state, compact),
         StatusValue::Sound(state) => json_string(&state, compact),
     }
 }
@@ -169,7 +169,7 @@ fn render_text(value: StatusValue) -> String {
             writeln!(output, "mode={}", mode_name(state.mode)).unwrap();
             writeln!(
                 output,
-                "display.overdrive={}",
+                "overdrive={}",
                 optional_bool(state.display_overdrive)
             )
             .unwrap();
@@ -180,8 +180,8 @@ fn render_text(value: StatusValue) -> String {
         StatusValue::Mode(mode) => {
             writeln!(output, "mode={}", mode_name(mode)).unwrap();
         }
-        StatusValue::Display(value) => {
-            writeln!(output, "display.overdrive={}", optional_bool(value)).unwrap();
+        StatusValue::Overdrive(value) => {
+            writeln!(output, "overdrive={}", optional_bool(value)).unwrap();
         }
         StatusValue::Sound(value) => {
             writeln!(output, "sound={}", optional_sound(value)).unwrap();
@@ -222,8 +222,8 @@ pub fn print_mode(mode: OperationMode) {
     println!("mode={}", mode_name(mode));
 }
 
-pub fn print_display(value: Option<bool>) {
-    println!("display.overdrive={}", optional_bool(value));
+pub fn print_overdrive(value: Option<bool>) {
+    println!("overdrive={}", optional_bool(value));
 }
 
 pub fn print_sound(value: SoundPreset) {
@@ -362,7 +362,7 @@ fn status_json(state: &SystemState) -> StatusJson {
         fan: fan_json(&state.fan),
         keyboard: keyboard_json(&state.keyboard),
         mode: state.mode,
-        display: state.display_overdrive,
+        overdrive: state.display_overdrive,
         sound: state.sound,
     }
 }
@@ -758,6 +758,8 @@ keyboard.lighting.settings.wave.direction=fromleft\n"
         assert!(value["keyboard"]["lighting"].get("static").is_none());
         assert!(value["keyboard"]["lighting"].get("dynamic").is_none());
         assert_eq!(value["mode"], "performance");
+        assert_eq!(value["overdrive"], true);
+        assert!(value.get("display").is_none());
         assert!(value.get("trust").is_none());
         assert!(value.get("reliability").is_none());
         assert!(value.get("source").is_none());
@@ -772,11 +774,11 @@ keyboard.lighting.settings.wave.direction=fromleft\n"
         .unwrap();
         assert_eq!(mode, serde_json::json!("quiet"));
 
-        let display = serde_json::from_str::<serde_json::Value>(
-            &target_json(StatusValue::Display(None), false).unwrap(),
+        let overdrive = serde_json::from_str::<serde_json::Value>(
+            &target_json(StatusValue::Overdrive(None), false).unwrap(),
         )
         .unwrap();
-        assert!(display.is_null());
+        assert!(overdrive.is_null());
     }
 
     #[test]

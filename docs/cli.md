@@ -5,7 +5,7 @@ RESense uses direct commands for mutations and one read command for state.
 ```text
 resense
 ├── --version
-├── status [fan|keyboard|mode|display|sound]
+├── status [fan|keyboard|mode|overdrive|sound]
 │   [--json] [--watch] [--interval <seconds>]
 ├── fan
 │   ├── auto
@@ -24,8 +24,7 @@ resense
 │   │   └── zoom --speed <1-9> --color <hex>
 │   ├── sticky {enable|disable}
 │   └── win-menu {enable|disable}
-├── display
-│   └── overdrive {enable|disable}
+├── overdrive {enable|disable}
 ├── sound
 │   └── <auto|music|movies|voice|strategy|rpg|shooter|custom>
 └── update
@@ -78,7 +77,7 @@ Full JSON has this shape:
     "win_menu_lock": true
   },
   "mode": "performance",
-  "display": true,
+  "overdrive": true,
   "sound": "music"
 }
 ```
@@ -87,7 +86,7 @@ Targeted JSON is the exact corresponding value, without a wrapper:
 
 ```powershell
 resense status mode --json       # "performance"
-resense status display --json    # true, false, or null when unsupported
+resense status overdrive --json  # true, false, or null when unsupported
 resense status fan --json        # the fan object
 ```
 
@@ -104,9 +103,9 @@ Up to date
 
 When a newer stable release exists, the second line is `Update available: <version>`.
 
-`resense update` performs the same check. It exits successfully without making changes when the installed version is current. When an update exists, it starts a visible PowerShell installer obtained through `irm git.new/resense`, passes the exact running executable path and parent process ID, and reports the final result from that installer. The command updates only the exact running `resense.exe`, so portable, development, and custom executable locations are supported without changing neighboring files or PATH entries.
+`resense update` performs the same check and waits for the complete update in the current command. When an update exists, it resolves one exact stable release tag, verifies the release installer and its checksums, stages the new binary, and replaces only the exact running `resense.exe`. Portable, development, and custom executable locations are supported without changing neighboring files or PATH entries.
 
-The update is noninteractive. If `$HOME/.agents/skills/resense/SKILL.md` already exists, it is refreshed from the same release. If it does not exist, `resense update` does not install it. Use `& ([scriptblock]::Create((irm git.new/resense))) -YesSkill` for an unattended skill installation or repair.
+If `$HOME/.agents/skills/resense/SKILL.md` already exists, it is refreshed from the same exact release. If it does not exist, `resense update` does not install it. The binary update is completed first; a skill replacement failure is reported explicitly and returns a nonzero exit code.
 
 An update check failure is fatal for `resense update`, and the existing executable is retained if verification or replacement fails.
 
@@ -121,7 +120,7 @@ resense keyboard static --zone1 FF0000 --zone2 off --zone3 FF0000 --zone4 off
 resense keyboard dynamic wave --speed 5 --direction from-left
 resense keyboard sticky enable
 resense keyboard win-menu disable
-resense display overdrive enable
+resense overdrive enable
 resense sound movies
 ```
 
